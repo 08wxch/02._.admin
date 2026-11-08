@@ -1,7 +1,7 @@
 /* ── หลังบ้านเจ้าของระบบ ───────────────────────────────── */
 
 import { closeModal, confirmDialog, openModal, toast } from '../ui.js';
-import { openAddStudent, openParentDetail } from './students.js';
+import { openAddParentForStudent, openAddStudent, openParentDetail } from './students.js';
 import { e, thaiDate, thaiDateTime } from '../utils.js';
 
 export async function renderAdmin(_arg, ctx) {
@@ -459,6 +459,7 @@ function parentsHtml(parents, links, ctx, orgs) {
             ? (byParent[p.user_id] || []).map((l) => `
                 <span class="chip chip--mute">${e(l.student_name || l.student_id)}${l.org_id ? ` · ${e(orgName(l.org_id))}` : ''}</span>`).join('')
             : `<button class="btn btn-primary btn-sm" data-add-student="${p.user_id}">+ เพิ่มบัญชีนักเรียน</button>`}
+          <button class="add-plus" data-add-student="${p.user_id}" title="เพิ่มบัญชีนักเรียน" aria-label="เพิ่มบัญชีนักเรียน">+</button>
         </div>
       </div>`).join('')}
   </div>` : `<div class="empty-soft"><b>ไม่พบผู้ปกครอง</b><p class="tiny dim" style="margin:0">ลองเลือกโรงเรียน/หน่วยงานอื่น</p></div>`}`;
@@ -507,6 +508,7 @@ function studentsHtml(students, ctx, orgs) {
           ${(st.parents || []).length
             ? (st.parents || []).map((p) => `<button class="chip chip--mute" data-open-parent="${p.user_id}">${e(p.name || p.email)}</button>`).join('')
             : '<span class="tiny dim">ยังไม่มีผู้ปกครอง</span>'}
+          <button class="add-plus" data-add-parent-to="${st.id}" title="เพิ่มผู้ปกครอง" aria-label="เพิ่มผู้ปกครอง">+</button>
         </div>
       </div>`).join('')}
   </div>` : `<div class="empty-soft"><b>ไม่พบนักเรียน</b><p class="tiny dim" style="margin:0">ลองเลือกโรงเรียน/หน่วยงานอื่น</p></div>`}`;
@@ -634,6 +636,9 @@ function bindAdmin(ctx, tab) {
   });
   root.querySelectorAll('[data-add-student]').forEach((btn) => {
     btn.addEventListener('click', () => openAddStudent(btn.dataset.addStudent, ctx));
+  });
+  root.querySelectorAll('[data-add-parent-to]').forEach((btn) => {
+    btn.addEventListener('click', () => openAddParentForStudent(btn.dataset.addParentTo, ctx));
   });
 
   // คอร์ส

@@ -91,6 +91,50 @@ async function studentList(ctx) {
 }
 
 
+
+/** เปิดหน้าต่างเลือกผู้ปกครอง เพื่อผูกกับนักเรียนคนนี้ */
+export async function openAddParentForStudent(studentId, ctx) {
+  let parents = [];
+  try { parents = await ctx.data.listParents(); } catch (err) { parents = []; }
+  if (!parents.length) { toast('ยังไม่มีบัญชีผู้ปกครองในระบบ', 'error'); return; }
+
+  openModal({
+    title: 'เพิ่มผู้ปกครองให้นักเรียน',
+    size: 'sm',
+    body: `
+      <input class="input" id="ap-search" placeholder="ค้นหาชื่อ/อีเมล/เบอร์" style="margin-bottom:10px">
+      <div class="school-list" id="ap-list">
+        ${parents.map((p) => `<button class="pick-row" data-pick-parent="${p.user_id}">
+          <b>${e(p.name || p.email)}</b>
+          <span class="tiny dim">${e(p.email || '')}${p.phone ? ` · ${e(p.phone)}` : ''}${p.line_id ? ` · ${e(p.line_id)}` : ''}</span>
+        </button>`).join('')}
+      </div>`,
+    onMount: (root) => {
+      const search = root.querySelector('#ap-search');
+      search?.addEventListener('input', () => {
+        const q = search.value.trim().toLowerCase();
+        root.querySelectorAll('[data-pick-parent]').forEach((el) => {
+          el.style.display = el.innerText.toLowerCase().includes(q) ? '' : 'none';
+        });
+      });
+      root.querySelectorAll('[data-pick-parent]').forEach((btn) => {
+        btn.addEventListener('click', async () => {
+          btn.disabled = true;
+          try {
+            await ctx.data.linkParentStudent(studentId, btn.dataset.pickParent);
+            toast('ผูกผู้ปกครองแล้ว', 'success');
+            closeModal();
+            location.reload();
+          } catch (err) {
+            btn.disabled = false;
+            toast(err.message || 'ผูกไม่สำเร็จ', 'error');
+          }
+        });
+      });
+    },
+  });
+}
+
 /** เปิดหน้าต่างเลือกนักเรียนในหน่วยงาน เพื่อผูกกับบัญชีผู้ปกครองคนนี้ */
 export async function openAddStudent(parentId, ctx) {
   let roster = { students: [] };
@@ -139,25 +183,24 @@ export async function openAddStudent(parentId, ctx) {
   });
 }
 
-/* ── รายละเอียดนักเรียน 1 คน ───────────────────────────── */
+/* ── รายละเอียดนักเรียน 1 คน (ข้อมูล + ผู้ปกครอง) ─────── */
 async function studentDetail(studentId, ctx) {
-  const [report, students, parents] = await Promise.all([
-    ctx.data.studentReport(studentId).catch(() => null),
+  const [students, parents] = await Promise.all([
     ctx.data.studentsOverview().catch(() => []),
     ctx.data.listParents().catch(() => []),
   ]);
-  if (!report) {
+
+  const row = students.find((s) => s.id === studentId);
+  if (!row) {
     return ctx.consoleLayout({
       items: ctx.menuItems('students'),
       title: 'ไม่พบนักเรียนคนนี้',
-      body: '<a class="btn btn-ghost btn-sm" href="#/students">กลับรายชื่อนักเรียน</a>',
+      body: '<a class="btn btn-ghost btn-sm" href="#/dashboard?tab=students">กลับรายชื่อนักเรียน</a>',
     });
   }
-
-  const row = students.find((s) => s.id === studentId) || {};
   const linked = row.parents || [];
 
-  setTimeout(async () => {
+  setTimeout(() => {
     const root = document.getElementById('app');
     root.querySelector('#d-add-parent')?.addEventListener('click', () => openLinkModal(studentId, students, parents, ctx));
     root.querySelectorAll('[data-parent]').forEach((btn) => {
@@ -167,7 +210,7 @@ async function studentDetail(studentId, ctx) {
       btn.addEventListener('click', async () => {
         const ok = await confirmDialog({
           title: 'ถอดผู้ปกครองออก',
-          message: 'ผู้ปกครองคนนี้จะไม่เห็นคะแนนของนักเรียนคนนี้อีก (บัญชีนักเรียนไม่หาย)',
+          message: 'ผู้ปกครองคนนี้จะไม่เห็นข้อมูลของนักเรียนคนนี้อีก (บัญชีนักเรียนไม่หาย)',
           confirmLabel: 'ถอดออก', tone: 'danger',
         });
         if (!ok) return;
@@ -182,19 +225,29 @@ async function studentDetail(studentId, ctx) {
 
   return ctx.consoleLayout({
     items: ctx.menuItems('students'),
-    title: report.student?.name || '',
-    subtitle: `${e(report.student?.code || '')}${report.student?.class ? ` · ${e(report.student.class)}` : ''}${report.student?.orgName ? ` · ${e(report.student.orgName)}` : ''}`,
+    title: row.name || '',
+    subtitle: `${e(row.code || '')}${row.class ? ` · ${e(row.class)}` : ''}${row.orgName ? ` · ${e(row.orgName)}` : ''}`,
     body: `
       <div class="detail-2col">
-        <div>${studentOverviewHtml(report, ctx, { studentId, hideHero: true })}</div>
-        <aside class="book-card" style="height:fit-content;position:sticky;top:80px">
+        <div class="book-card">
+          <div style="font-family:var(--brand-font);font-size:16px;margin-bottom:10px">ข้อมูลนักเรียน</div>
+          <div class="kv"><span>รหัสนักเรียน</span><b>${e(row.code || '—')}</b></div>
+          <div class="kv"><span>ชื่อ–นามสกุล</span><b>${e(row.name || '—')}</b></div>
+          <div class="kv"><span>class</span><b>${e(row.class || '—')}</b></div>
+          <div class="kv"><span>โรงเรียน / หน่วยงาน</span><b>${e(row.orgName || '—')}</b></div>
+          <div class="hint" style="margin-top:12px">
+            ดูคะแนนและเฉลยรายข้อได้ที่ระบบ <b>02._.mock</b>
+          </div>
+        </div>
+
+        <aside class="book-card" style="height:fit-content">
           <div style="font-family:var(--brand-font);font-size:16px;margin-bottom:4px">บัญชีผู้ปกครองที่ผูกไว้</div>
           <p class="tiny dim" style="margin:0 0 12px">นักเรียน 1 คนผูกได้มากกว่า 1 บัญชี</p>
           ${linked.length ? linked.map((p) => `
             <div class="parent-line" data-parent="${p.user_id}">
               <div>
                 <b>${e(p.name || p.email)}</b>
-                <div class="tiny dim">${e(p.email || '')}${p.phone ? ` · ${e(p.phone)}` : ''}</div>
+                <div class="tiny dim">${e(p.phone || '')}${p.line_id ? ` · ${e(p.line_id)}` : ''}</div>
               </div>
               <button class="btn btn-ghost btn-sm" data-unlink="${p.link_id}" style="color:var(--red)">ถอด</button>
             </div>`).join('')
@@ -278,7 +331,10 @@ export async function openParentDetail(userId, ctx) {
       <div class="kv"><span>LINE</span><b>${e(data.line_id || '—')}</b></div>
       <div class="kv"><span>ชำระแล้วรวม</span><b>฿${ctx.money(data.total_paid || 0)}</b></div>
 
-      <div style="margin-top:14px" class="tiny dim">นักเรียนที่ผูกไว้ (${(data.students || []).length})</div>
+      <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;margin-top:14px">
+        <div class="tiny dim">นักเรียนที่ผูกไว้ (${(data.students || []).length})</div>
+        <button class="btn btn-primary btn-sm" id="pd-add-student">+ เพิ่มนักเรียน</button>
+      </div>
       <div class="school-list" style="margin-top:6px">
         ${(data.students || []).length ? (data.students || []).map((s) => `
           <div class="parent-line">
@@ -307,27 +363,60 @@ export async function openParentDetail(userId, ctx) {
 
       <div style="margin-top:16px;border-top:1px solid var(--book-line);padding-top:14px">
         <label class="tiny dim">รหัสผ่านของผู้ปกครองคนนี้ (ใช้ตอนล็อกอิน)</label>
-        <div style="display:flex;gap:8px;margin-top:6px">
-          <input class="input" id="pd-pass" value="${e(data.password || '')}" readonly>
-          <button class="btn btn-ghost btn-sm" id="pd-edit">แก้ไข</button>
-          <button class="btn btn-primary btn-sm" id="pd-save" style="display:none">บันทึก</button>
+        <div class="pass-row" style="margin-top:6px">
+          <input class="input" id="pd-pass" readonly data-real="${e(data.password || '')}"
+            value="${data.password ? '••••••••' : '—'}">
+          <button class="icon-btn" id="pd-eye" type="button" title="ดูรหัสผ่าน" aria-label="ดูรหัสผ่าน">
+            <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7-10-7-10-7z"/><circle cx="12" cy="12" r="3"/></svg>
+          </button>
+          <button class="icon-btn" id="pd-pencil" type="button" title="เปลี่ยนรหัสผ่าน" aria-label="เปลี่ยนรหัสผ่าน">
+            <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z"/></svg>
+          </button>
+        </div>
+        <div id="pd-change" style="display:none;margin-top:10px">
+          <div class="field-row"><label>รหัสผ่านใหม่</label>
+            <input id="pd-new1" type="password" placeholder="อย่างน้อย 6 ตัวอักษร" autocomplete="new-password"></div>
+          <div class="field-row"><label>ยืนยันรหัสผ่านใหม่</label>
+            <input id="pd-new2" type="password" placeholder="พิมพ์ซ้ำ" autocomplete="new-password"></div>
+          <div style="display:flex;gap:8px">
+            <button class="btn btn-ghost btn-sm" id="pd-cancel" style="flex:1">ยกเลิก</button>
+            <button class="btn btn-primary btn-sm" id="pd-save" style="flex:1">บันทึก</button>
+          </div>
         </div>
       </div>`,
     footer: `<button class="btn btn-danger" type="button" data-del>ลบบัญชีผู้ปกครอง</button>
              <button class="btn btn-ghost" type="button" data-modal-close>ปิด</button>`,
     onMount: (root) => {
       const pass = root.querySelector('#pd-pass');
-      root.querySelector('#pd-edit')?.addEventListener('click', () => {
-        pass.readOnly = false;
-        pass.focus();
-        root.querySelector('#pd-edit').style.display = 'none';
-        root.querySelector('#pd-save').style.display = '';
+      const dots = (v) => '•'.repeat(Math.max(6, Math.min(14, String(v || '').length || 8)));
+
+      root.querySelector('#pd-eye')?.addEventListener('click', () => {
+        const real = pass.dataset.real || '';
+        if (!real) return;
+        pass.value = pass.value.includes('•') ? real : dots(real);
+      });
+      root.querySelector('#pd-pencil')?.addEventListener('click', () => {
+        const box = root.querySelector('#pd-change');
+        box.style.display = box.style.display === 'none' ? '' : 'none';
+      });
+      root.querySelector('#pd-cancel')?.addEventListener('click', () => {
+        root.querySelector('#pd-change').style.display = 'none';
+        root.querySelector('#pd-new1').value = '';
+        root.querySelector('#pd-new2').value = '';
       });
       root.querySelector('#pd-save')?.addEventListener('click', async () => {
+        const p1 = root.querySelector('#pd-new1').value;
+        const p2 = root.querySelector('#pd-new2').value;
+        if (p1.length < 6) { toast('รหัสผ่านอย่างน้อย 6 ตัวอักษร', 'error'); return; }
+        if (p1 !== p2) { toast('รหัสผ่านทั้งสองช่องไม่ตรงกัน', 'error'); return; }
         try {
-          await ctx.data.setParentPassword(userId, pass.value.trim());
+          await ctx.data.setParentPassword(userId, p1);
+          pass.dataset.real = p1;
+          pass.value = dots(p1);
+          root.querySelector('#pd-change').style.display = 'none';
+          root.querySelector('#pd-new1').value = '';
+          root.querySelector('#pd-new2').value = '';
           toast('เปลี่ยนรหัสผ่านแล้ว', 'success');
-          pass.readOnly = true;
         } catch (err) { toast(err.message || 'ไม่สำเร็จ', 'error'); }
       });
       root.querySelectorAll('[data-unlink]').forEach((btn) => {
