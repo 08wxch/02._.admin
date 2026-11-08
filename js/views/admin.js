@@ -346,9 +346,10 @@ function usersHtml(parents, teachers, ctx, orgs = []) {
   <div class="book-card">
     <div style="font-family:var(--brand-font);font-size:16px;margin-bottom:8px">ครู (${tList.length})</div>
     ${tList.length ? `<div class="table-wrap"><table class="book-table">
-      <thead><tr><th>ชื่อ</th><th>ติดต่อ</th><th>หน่วยงาน</th></tr></thead>
+      <thead><tr><th>รหัสครู (จาก 02._.mock)</th><th>ชื่อที่แสดง</th><th>ติดต่อ</th><th>หน่วยงาน</th></tr></thead>
       <tbody>${tList.map((a) => `<tr>
-        <td><b>${e(a.name || '—')}</b><div class="tiny dim">${e(a.email || '')}</div></td>
+        <td><b>${e(a.teacher_code || '—')}</b></td>
+        <td class="tiny">${a.name ? e(a.name) : '<span class="dim">—</span>'}</td>
         <td class="tiny">${e(a.phone || '—')}<div class="tiny dim">${e(a.line_id || '')}</div></td>
         <td class="tiny">${e(orgName(a.org_id) || '—')}</td>
       </tr>`).join('')}</tbody>

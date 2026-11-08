@@ -42,10 +42,10 @@ export function consoleLayout({ items = [], title = '', subtitle = '', body = ''
     </a>
     <div class="console__top-right">
       <button class="profile-btn" id="profile-btn" title="ข้อมูลของฉัน">
-        <span class="avatar avatar--md" style="width:30px;height:30px">${e((acc.name || '?').trim().charAt(0))}</span>
+        <span class="avatar avatar--md" style="width:30px;height:30px">${e((acc.teacher_code || acc.name || '?').trim().charAt(0).toUpperCase())}</span>
         <span class="profile-btn__text">
-          <b>${e(acc.name || acc.teacher_code || '')}</b>
-          <span class="tiny dim">${acc.role === 'owner' ? 'เจ้าของระบบ' : 'ครู'}</span>
+          <b>${e(acc.teacher_code || acc.name || '')}</b>
+          <span class="tiny dim">${acc.name ? e(acc.name) : (acc.role === 'owner' ? 'เจ้าของระบบ' : 'ครู')}</span>
         </span>
       </button>
     </div>
@@ -85,10 +85,10 @@ export function openProfile() {
     body: `
       <div class="kv"><span>บทบาท</span><b>${isTeacher ? (acc.role === 'owner' ? 'เจ้าของระบบ' : 'ครู') : 'ผู้ปกครอง'}</b></div>
       ${isTeacher
-        ? `<div class="kv"><span>รหัสครู</span><b>${e(acc.teacher_code || '—')}</b></div>`
+        ? `<div class="kv"><span>บัญชี (รหัสครูจาก 02._.mock)</span><b>${e(acc.teacher_code || '—')}</b></div>`
         : `<div class="kv"><span>อีเมล</span><b>${e(acc.email || '—')}</b></div>`}
-      <div class="field-row" style="margin-top:10px"><label>ชื่อที่แสดง</label>
-        <input id="pf-name" value="${e(acc.name || '')}" maxlength="80"></div>
+      <div class="field-row" style="margin-top:10px"><label>ชื่อที่แสดง (ไม่บังคับ)</label>
+        <input id="pf-name" value="${e(acc.name || '')}" maxlength="80" placeholder="เว้นว่างไว้ก็ได้ — ระบบจะใช้รหัสครูแทน"></div>
       <div class="field-row"><label>เบอร์โทร</label>
         <input id="pf-phone" value="${e(acc.phone || '')}" maxlength="32" placeholder="089-123-4567"></div>
       <div class="field-row"><label>LINE ID</label>

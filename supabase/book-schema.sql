@@ -872,11 +872,12 @@ begin
       where id = v_id;
   end if;
 
+  -- บัญชีของ 02._.admin ผูกด้วย "รหัสครู" จาก 02._.mock เท่านั้น
+  -- ไม่คัดลอกชื่อ/อีเมลส่วนตัวจาก mock มาเป็นชื่อบัญชี (เจ้าของพิมพ์เองได้ในโปรไฟล์)
   insert into public.bk_accounts (user_id, role, name, email, teacher_code, org_id, org_hint, approved)
-  values (v_id, v_role, coalesce(v_t->>'name',''), v_email, v_code,
+  values (v_id, v_role, '', v_email, v_code,
           coalesce(v_t->>'orgId',''), coalesce(v_t->>'school',''), true)
   on conflict (user_id) do update set
-    name = excluded.name,
     teacher_code = excluded.teacher_code,
     org_id = excluded.org_id,
     org_hint = excluded.org_hint,
