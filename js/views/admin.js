@@ -5,7 +5,10 @@ import { openAddStudent, openParentDetail } from './students.js';
 import { e, thaiDate, thaiDateTime } from '../utils.js';
 
 export async function renderAdmin(_arg, ctx) {
-  const tab = ctx.route?.query.get('tab') || 'orders';
+  const role = ctx.me?.role || 'teacher';
+  window.__bkRole = role;
+  const fallbackTab = role === 'owner' ? 'orders' : 'parents';
+  const tab = ctx.route?.query.get('tab') || fallbackTab;
   const editId = ctx.route?.query.get('edit') || '';
 
   const [orders, courses, accounts, links, roster, coupons, orgs, teachersMock, studentsOverviewData] = await Promise.all([
@@ -33,7 +36,8 @@ export async function renderAdmin(_arg, ctx) {
     { id: 'parents', label: 'ผู้ปกครอง', icon: 'parents', group: 'people' },
     { id: 'students', label: 'นักเรียน', icon: 'students', group: 'people' },
     { id: 'settings', label: 'ตั้งค่า', icon: 'settings', group: 'config' },
-  ].map((it) => ({ ...it, href: `#/dashboard?tab=${it.id}`, active: tab === it.id }));
+  ].filter((it) => isOwnerView() || it.group === 'people')
+   .map((it) => ({ ...it, href: `#/dashboard?tab=${it.id}`, active: tab === it.id }));
 
   ctx._roster = roster;
 
@@ -53,17 +57,22 @@ export async function renderAdmin(_arg, ctx) {
               ? studentsHtml(studentsOverviewData, ctx, orgs)
               : settingsHtml(ctx);
 
+  const isOwnerRole = ctx.me?.role === 'owner';
   const html = ctx.consoleLayout({
     items,
-    title: 'หลังบ้าน',
-    subtitle: 'ยืนยันการชำระเงิน จัดการคอร์ส และผูกนักเรียนให้ผู้ปกครอง',
+    title: isOwnerRole ? 'หลังบ้าน' : 'บุคลากรและนักเรียน',
+    subtitle: isOwnerRole
+      ? 'ยืนยันการชำระเงิน จัดการคอร์ส และผูกนักเรียนให้ผู้ปกครอง'
+      : 'ดูและจัดการผู้ปกครอง/นักเรียนในหน่วยงานของคุณ',
     body: `
       <div class="stat-row">
-        <div class="stat-card"><div class="k">รอยืนยัน</div><div class="v">${pendingCount}<small>รายการ</small></div></div>
-        <div class="stat-card"><div class="k">ยืนยันแล้ว</div><div class="v">${orders.filter((o) => o.status === 'confirmed').length}<small>รายการ</small></div></div>
-        <div class="stat-card"><div class="k">ยอดรับชำระ</div><div class="v">${ctx.baht(paid)}</div></div>
+        ${isOwnerRole ? `
+          <div class="stat-card"><div class="k">รอยืนยัน</div><div class="v">${pendingCount}<small>รายการ</small></div></div>
+          <div class="stat-card"><div class="k">ยืนยันแล้ว</div><div class="v">${orders.filter((o) => o.status === 'confirmed').length}<small>รายการ</small></div></div>
+          <div class="stat-card"><div class="k">ยอดรับชำระ</div><div class="v">${ctx.baht(paid)}</div></div>` : ''}
         <div class="stat-card"><div class="k">ผู้ปกครอง</div><div class="v">${parents.length}<small>คน</small></div></div>
-        <div class="stat-card"><div class="k">โค้ดส่วนลดที่เปิด</div><div class="v">${coupons.filter((c) => c.active).length}<small>โค้ด</small></div></div>
+        <div class="stat-card"><div class="k">นักเรียน</div><div class="v">${studentsOverviewData.length}<small>คน</small></div></div>
+        ${isOwnerRole ? `<div class="stat-card"><div class="k">โค้ดส่วนลดที่เปิด</div><div class="v">${coupons.filter((c) => c.active).length}<small>โค้ด</small></div></div>` : ''}
       </div>
       ${body}
     `,
@@ -71,6 +80,12 @@ export async function renderAdmin(_arg, ctx) {
 
   setTimeout(() => bindAdmin(ctx, tab), 0);
   return html;
+}
+
+
+/** ครู (ไม่ใช่เจ้าของ) เห็นเฉพาะเมนูบุคลากรและนักเรียน */
+function isOwnerView() {
+  return (window.__bkRole || '') === 'owner';
 }
 
 /* ── รอยืนยัน ─────────────────────────────────────────── */
@@ -326,23 +341,74 @@ function scopeParents(parents, links, ctx) {
 
 /* ── ครู (จาก 02._.mock) ─────────────────────────────── */
 function teachersHtml(teachers, ctx, orgs) {
-  const orgName = (id) => orgs.find((o) => o.id === id)?.name || id || '—';
+  const orgFilter = ctx.route?.query.get('torg') || '';
+  const orgName = (id) => orgs.find((o) => o.id === id)?.name || id || '';
+  const shown = orgFilter ? teachers.filter((t) => t.orgId === orgFilter) : teachers;
+
   return `
-  <div class="book-card">
-    <div style="display:flex;justify-content:space-between;align-items:baseline;gap:12px;flex-wrap:wrap;margin-bottom:10px">
-      <div style="font-family:var(--brand-font);font-size:16px">ครูทั้งหมด (${teachers.length})</div>
-      <div class="tiny dim">ข้อมูลจากรายชื่อบุคลากรใน 02._.mock</div>
-    </div>
-    ${teachers.length ? `<div class="table-wrap"><table class="book-table">
-      <thead><tr><th>รหัสครู</th><th>ชื่อ–นามสกุล</th><th>โรงเรียน / หน่วยงาน</th><th>ติดต่อ</th></tr></thead>
-      <tbody>${teachers.map((t) => `<tr>
-        <td><b>${e(t.code || '—')}</b></td>
-        <td>${e(t.name || '—')}${t.isOwner ? ' <span class="chip chip--ok">เจ้าของระบบ</span>' : ''}</td>
-        <td class="tiny">${e(t.orgName || orgName(t.orgId))}</td>
-        <td class="tiny">${e(t.phone || '—')}</td>
-      </tr>`).join('')}</tbody>
-    </table></div>` : '<p class="tiny dim">ไม่พบรายชื่อครูใน 02._.mock</p>'}
-  </div>`;
+  <div class="filter-bar">
+    <span class="filter-bar__icon">
+      <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 4h18l-7 8v6l-4 2v-8z"/></svg>
+    </span>
+    <select id="teacher-org" class="filter-select">
+      <option value="">ครูทั้งหมด (${teachers.length})</option>
+      ${orgs.map((o) => `<option value="${o.id}" ${orgFilter === o.id ? 'selected' : ''}>${e(o.name)}</option>`).join('')}
+    </select>
+  </div>
+
+  ${shown.length ? `<div class="book-card" style="padding:8px 10px">
+    ${shown.map((t) => `
+      <div class="pair-row">
+        <button class="pair-row__left" data-open-teacher="${e(t.code)}">
+          <span class="pair-row__avatar">${e((t.name || '?').trim().charAt(0))}</span>
+          <span class="pair-row__text">
+            <b style="font-size:16px">${e(t.name || '—')}${t.isOwner ? ' <span class="chip chip--ok">เจ้าของระบบ</span>' : ''}</b>
+            <span class="tiny dim">${e(t.orgName || orgName(t.orgId) || 'ไม่ระบุหน่วยงาน')}</span>
+          </span>
+        </button>
+        <div class="pair-row__right">
+          <span class="tiny dim">กดที่ชื่อเพื่อดูข้อมูลติดต่อ</span>
+        </div>
+      </div>`).join('')}
+  </div>` : `<div class="empty-soft"><b>ไม่พบครู</b><p class="tiny dim" style="margin:0">ลองเลือกโรงเรียน/หน่วยงานอื่น</p></div>`}`;
+}
+
+
+/* ── รายละเอียดครู ───────────────────────────────────── */
+async function openTeacherDetail(code, ctx) {
+  let d;
+  try { d = await ctx.data.teacherDetail(code); } catch (err) {
+    toast(err.message || 'โหลดข้อมูลครูไม่สำเร็จ', 'error');
+    return;
+  }
+  if (!d) { toast('ไม่พบข้อมูลครูคนนี้', 'error'); return; }
+
+  openModal({
+    title: d.name || code,
+    size: 'sm',
+    body: `
+      <div class="kv"><span>รหัสครู</span><b>${e(d.code)}</b></div>
+      <div class="kv"><span>โรงเรียน / หน่วยงาน</span><b>${e(d.orgName || d.school || '—')}</b></div>
+      ${d.subject ? `<div class="kv"><span>กลุ่มสาระ</span><b>${e(d.subject)}</b></div>` : ''}
+      <div class="kv"><span>เบอร์โทร (ที่ให้ไว้)</span><b>${e(d.phone || d.mockPhone || '—')}</b></div>
+      <div class="kv"><span>LINE ID</span><b>${e(d.lineId || '—')}</b></div>
+      ${d.isOwner ? '<div class="kv"><span>สิทธิ์</span><b>เจ้าของระบบ — เห็นทุกหน่วยงาน</b></div>' : ''}
+
+      <div style="margin-top:14px;border-top:1px solid var(--book-line);padding-top:12px">
+        <div class="tiny dim" style="margin-bottom:6px">หน่วยงาน/โรงเรียนที่มองเห็น</div>
+        <div style="display:flex;gap:6px;flex-wrap:wrap">
+          ${(d.orgs || []).length
+            ? (d.orgs || []).map((o) => `<span class="chip chip--mute">${e(o.name)}</span>`).join('')
+            : '<span class="tiny dim">—</span>'}
+        </div>
+      </div>
+
+      <div style="display:flex;gap:10px;margin-top:14px">
+        <div class="stat-card" style="flex:1;padding:12px 14px"><div class="k">ผู้ปกครองที่ดูแล</div><div class="v" style="font-size:20px">${d.parents ?? 0}</div></div>
+        <div class="stat-card" style="flex:1;padding:12px 14px"><div class="k">นักเรียน</div><div class="v" style="font-size:20px">${d.students ?? 0}</div></div>
+      </div>`,
+    footer: `<button class="btn btn-ghost" type="button" data-modal-close>ปิด</button>`,
+  });
 }
 
 /* ── ผู้ปกครอง ───────────────────────────────────────── */
@@ -544,6 +610,15 @@ function bindAdmin(ctx, tab) {
     });
   });
 
+  root.querySelectorAll('[data-open-teacher]').forEach((btn) => {
+    btn.addEventListener('click', () => openTeacherDetail(btn.dataset.openTeacher, ctx));
+  });
+
+  root.querySelector('#teacher-org')?.addEventListener('change', (ev) => {
+    location.hash = `#/dashboard?tab=teachers&torg=${encodeURIComponent(ev.currentTarget.value)}`;
+    window.dispatchEvent(new HashChangeEvent('hashchange'));
+  });
+
   root.querySelectorAll('[data-open-parent]').forEach((btn) => {
     btn.addEventListener('click', () => openParentDetail(btn.dataset.openParent, ctx));
   });
@@ -604,6 +679,15 @@ function bindAdmin(ctx, tab) {
     location.hash = `#/dashboard?tab=users&uorg=${encodeURIComponent(ev.currentTarget.value)}`;
     window.dispatchEvent(new HashChangeEvent('hashchange'));
   });
+  root.querySelectorAll('[data-open-teacher]').forEach((btn) => {
+    btn.addEventListener('click', () => openTeacherDetail(btn.dataset.openTeacher, ctx));
+  });
+
+  root.querySelector('#teacher-org')?.addEventListener('change', (ev) => {
+    location.hash = `#/dashboard?tab=teachers&torg=${encodeURIComponent(ev.currentTarget.value)}`;
+    window.dispatchEvent(new HashChangeEvent('hashchange'));
+  });
+
   root.querySelectorAll('[data-open-parent]').forEach((btn) => {
     btn.addEventListener('click', async () => {
       const mod = await import('./students.js');

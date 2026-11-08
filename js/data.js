@@ -487,6 +487,12 @@ export async function teachersList() {
   return data || [];
 }
 
+export async function teacherDetail(code) {
+  const { data, error } = await sb().rpc('bk_teacher_detail', { p_code: String(code || '') });
+  if (error) throw new Error(error.message || 'โหลดข้อมูลครูไม่สำเร็จ');
+  return data;
+}
+
 export async function listOrganizations() {
   const { data, error } = await sb().rpc('bk_organizations');
   if (error) throw error;

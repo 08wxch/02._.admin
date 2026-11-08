@@ -1265,3 +1265,65 @@ begin
   return jsonb_build_object('ok', true, 'email', v_email, 'role', v_role, 'name', coalesce(v_t->>'name',''));
 end;
 $$;
+
+-- รายละเอียดครู 1 คน (ข้อมูลติดต่อที่ครูใส่ใน 02._.admin + หน่วยงานที่มองเห็น)
+create or replace function public.bk_teacher_detail(p_code text)
+returns jsonb language plpgsql stable security definer set search_path = public as $$
+declare
+  v_state jsonb;
+  v_t jsonb;
+  v_acc public.bk_accounts;
+  v_orgs jsonb := '[]'::jsonb;
+  o jsonb;
+  v_is_owner boolean := false;
+begin
+  if not (public.bk_is_owner() or public.bk_is_teacher()) then raise exception 'ไม่มีสิทธิ์'; end if;
+
+  select data into v_state from public.app_state where id = 'main';
+  if v_state is null then return null; end if;
+
+  select t into v_t
+  from jsonb_array_elements(coalesce(v_state->'teachers','[]'::jsonb)) t
+  where lower(t->>'code') = lower(trim(coalesce(p_code,'')))
+  limit 1;
+  if v_t is null then return null; end if;
+
+  v_is_owner := coalesce((v_t->>'isOwner')::boolean, false);
+
+  select * into v_acc from public.bk_accounts where lower(teacher_code) = lower(trim(coalesce(p_code,''))) limit 1;
+
+  if v_is_owner then
+    select coalesce(jsonb_agg(jsonb_build_object('id', x->>'id', 'name', x->>'name', 'type', coalesce(x->>'type',''))), '[]'::jsonb)
+      into v_orgs
+      from jsonb_array_elements(coalesce(v_state->'organizations','[]'::jsonb)) x;
+  else
+    select coalesce(jsonb_agg(jsonb_build_object('id', x->>'id', 'name', x->>'name', 'type', coalesce(x->>'type',''))), '[]'::jsonb)
+      into v_orgs
+      from jsonb_array_elements(coalesce(v_state->'organizations','[]'::jsonb)) x
+      where x->>'id' = coalesce(v_t->>'orgId','');
+  end if;
+
+  return jsonb_build_object(
+    'code', coalesce(v_t->>'code',''),
+    'name', coalesce(v_t->>'name',''),
+    'orgId', coalesce(v_t->>'orgId',''),
+    'orgName', coalesce((select x->>'name' from jsonb_array_elements(coalesce(v_state->'organizations','[]'::jsonb)) x where x->>'id' = v_t->>'orgId' limit 1), ''),
+    'school', coalesce(v_t->>'school',''),
+    'subject', coalesce(v_t->>'subject',''),
+    'isOwner', v_is_owner,
+    'mockPhone', coalesce(v_t->>'phone',''),
+    'email', '',                      -- ไม่แสดงอีเมลครู
+    'phone', coalesce(v_acc.phone, ''),
+    'lineId', coalesce(v_acc.line_id, ''),
+    'displayName', coalesce(v_acc.name, ''),
+    'orgs', v_orgs,
+    'parents', (select count(*) from public.bk_accounts a where a.role='parent'
+                 and (v_is_owner or exists (select 1 from public.bk_parent_students l
+                        where l.user_id = a.user_id and l.org_id = coalesce(v_t->>'orgId','')))),
+    'students', (select count(*) from public.app_state s, jsonb_array_elements(s.data->'students') st
+                  where s.id='main' and (v_is_owner or coalesce(st->>'orgId','') = coalesce(v_t->>'orgId','')))
+  );
+end;
+$$;
+
+grant execute on function public.bk_teacher_detail(text) to authenticated;

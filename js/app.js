@@ -107,7 +107,7 @@ export function consoleLayout({ items = [], title = '', subtitle = '', body = ''
         <span class="avatar avatar--md" style="width:32px;height:32px">${e((identity.trim().charAt(0) || '?').toUpperCase())}</span>
         <button class="sidebar-profile__copy" type="button" id="profile-btn" title="ข้อมูลของฉัน">
           <strong>${e(identity)}</strong>
-          <span>${e(acc.teacher_code || roleLabel)}${orgLabel ? ` · ${e(orgLabel)}` : ''}</span>
+          <span>${e(orgLabel || roleLabel)}</span>
         </button>
         <div class="sidebar-profile__actions">
           <button class="icon-btn" type="button" data-signout title="ออกจากระบบ" aria-label="ออกจากระบบ">
