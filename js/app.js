@@ -4,7 +4,7 @@ import { CONFIG } from './config.js';
 import * as data from './data.js';
 import { closeModal, confirmDialog, openModal, toast } from './ui.js';
 import { e, formatNumber } from './utils.js';
-import { renderAdmin } from './views/admin.js';
+import { buildMenu, renderAdmin } from './views/admin.js';
 import { renderStudents } from './views/students.js';
 import { renderTeacherAuth } from './views/auth.js';
 
@@ -104,10 +104,12 @@ export function consoleLayout({ items = [], title = '', subtitle = '', body = ''
         <nav class="side-nav">${renderGroup(config)}</nav>` : ''}
 
       <div class="sidebar-profile">
-        <span class="avatar avatar--md" style="width:32px;height:32px">${e((identity.trim().charAt(0) || '?').toUpperCase())}</span>
         <button class="sidebar-profile__copy" type="button" id="profile-btn" title="ข้อมูลของฉัน">
-          <strong>${e(identity)}</strong>
-          <span>${e(orgLabel || roleLabel)}</span>
+          <span class="avatar avatar--md" style="width:32px;height:32px">${e((identity.trim().charAt(0) || '?').toUpperCase())}</span>
+          <span class="sidebar-profile__text">
+            <strong>${e(identity)}</strong>
+            <span>${e(orgLabel || roleLabel)}</span>
+          </span>
         </button>
         <div class="sidebar-profile__actions">
           <button class="icon-btn" type="button" data-signout title="ออกจากระบบ" aria-label="ออกจากระบบ">
@@ -211,6 +213,7 @@ function parse() {
 
 const ctx = {
   data, me: null, settings, money, baht, statusBadge, consoleLayout, courseCardForAdmin,
+  menuItems: (active) => buildMenu(active, data.getAccount()?.role === 'owner'),
   go: (p) => { location.hash = `#${p}`; },
 };
 

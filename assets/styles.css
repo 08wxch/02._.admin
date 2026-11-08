@@ -3976,3 +3976,10 @@ button.chip:hover { background: var(--mint-strong); }
 .filter-select:focus { outline: 2px solid color-mix(in srgb, var(--ink) 22%, transparent); border-radius: 8px; }
 .filter-select:disabled { color: var(--muted-2); cursor: not-allowed; }
 .filter-bar__label { margin-left: auto; font-size: 12.5px; color: var(--muted); }
+
+/* แถวโปรไฟล์ในแถบดำ: ทั้งแถวกดได้ */
+.sidebar-profile__copy { display: flex; align-items: center; gap: 9px; }
+.sidebar-profile__text { display: flex; flex-direction: column; line-height: 1.25; min-width: 0; }
+.sidebar-profile__text strong { display: block; font-size: 11.5px; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.sidebar-profile__text span { display: block; font-size: 9px; color: rgba(242, 242, 242, .45); }
+.sidebar-profile__copy:hover .sidebar-profile__text strong { color: #fff; text-decoration: underline; text-underline-offset: 3px; }

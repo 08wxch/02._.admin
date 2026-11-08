@@ -28,16 +28,9 @@ export async function renderAdmin(_arg, ctx) {
   const pendingCount = orders.filter((o) => o.status === 'pending_confirm').length;
   const paid = orders.filter((o) => o.status === 'confirmed').reduce((s, o) => s + Number(o.amount || 0), 0);
 
-  const items = [
-    { id: 'orders', label: 'รอยืนยัน', icon: 'orders', count: pendingCount || '' },
-    { id: 'courses', label: 'คอร์สเรียน', icon: 'courses' },
-    { id: 'coupons', label: 'บัตรส่วนลด', icon: 'coupons' },
-    { id: 'teachers', label: 'ครู', icon: 'teachers', group: 'people' },
-    { id: 'parents', label: 'ผู้ปกครอง', icon: 'parents', group: 'people' },
-    { id: 'students', label: 'นักเรียน', icon: 'students', group: 'people' },
-    { id: 'settings', label: 'ตั้งค่า', icon: 'settings', group: 'config' },
-  ].filter((it) => isOwnerView() || it.group === 'people')
-   .map((it) => ({ ...it, href: `#/dashboard?tab=${it.id}`, active: tab === it.id }));
+  const items = buildMenu(tab, ctx.me?.role === 'owner').map((it) => ({
+    ...it, count: it.id === 'orders' ? pendingCount || '' : '',
+  }));
 
   ctx._roster = roster;
 
@@ -86,6 +79,23 @@ export async function renderAdmin(_arg, ctx) {
 /** ครู (ไม่ใช่เจ้าของ) เห็นเฉพาะเมนูบุคลากรและนักเรียน */
 function isOwnerView() {
   return (window.__bkRole || '') === 'owner';
+}
+
+
+/** เมนูหลังบ้านชุดเดียว ใช้ร่วมกันทุกหน้า (รวมหน้ารายละเอียดนักเรียน) */
+export function buildMenu(activeTab, isOwner) {
+  const items = [
+    { id: 'orders', label: 'รอยืนยัน', icon: 'orders' },
+    { id: 'courses', label: 'คอร์สเรียน', icon: 'courses' },
+    { id: 'coupons', label: 'บัตรส่วนลด', icon: 'coupons' },
+    { id: 'teachers', label: 'ครู', icon: 'teachers', group: 'people' },
+    { id: 'parents', label: 'ผู้ปกครอง', icon: 'parents', group: 'people' },
+    { id: 'students', label: 'นักเรียน', icon: 'students', group: 'people' },
+    { id: 'settings', label: 'ตั้งค่า', icon: 'settings', group: 'config' },
+  ];
+  return items
+    .filter((it) => isOwner || it.group === 'people')
+    .map((it) => ({ ...it, href: `#/dashboard?tab=${it.id}`, active: activeTab === it.id }));
 }
 
 /* ── รอยืนยัน ─────────────────────────────────────────── */

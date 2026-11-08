@@ -62,11 +62,7 @@ async function studentList(ctx) {
   }, 0);
 
   return ctx.consoleLayout({
-    items: [
-      { href: '#/students', label: 'รายชื่อนักเรียน', active: true },
-      { href: '#/dashboard', label: 'หลังบ้าน', hidden: ctx.me.role !== 'owner' },
-      { href: '#/account', label: 'บัญชีของฉัน' },
-    ].filter((i) => !i.hidden),
+    items: ctx.menuItems ? ctx.menuItems('students') : [],
     title: 'รายชื่อนักเรียน',
     subtitle: 'กดที่ชื่อนักเรียนเพื่อดูคะแนนและข้อมูล · ด้านขวาคือบัญชีผู้ปกครองที่ผูกอยู่',
     body: `
@@ -152,7 +148,7 @@ async function studentDetail(studentId, ctx) {
   ]);
   if (!report) {
     return ctx.consoleLayout({
-      items: [{ href: '#/students', label: 'รายชื่อนักเรียน', active: true }],
+      items: ctx.menuItems('students'),
       title: 'ไม่พบนักเรียนคนนี้',
       body: '<a class="btn btn-ghost btn-sm" href="#/students">กลับรายชื่อนักเรียน</a>',
     });
@@ -185,10 +181,7 @@ async function studentDetail(studentId, ctx) {
   }, 0);
 
   return ctx.consoleLayout({
-    items: [
-      { href: '#/students', label: 'รายชื่อนักเรียน', active: true },
-      { href: '#/account', label: 'บัญชีของฉัน' },
-    ],
+    items: ctx.menuItems('students'),
     title: report.student?.name || '',
     subtitle: `${e(report.student?.code || '')}${report.student?.class ? ` · ${e(report.student.class)}` : ''}${report.student?.orgName ? ` · ${e(report.student.orgName)}` : ''}`,
     body: `
