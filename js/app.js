@@ -30,6 +30,11 @@ export function consoleLayout({ items = [], title = '', subtitle = '', body = ''
   const acc = data.getAccount() || {};
   return `
   <div class="console__top">
+    <button class="nav-toggle" id="console-nav-toggle" type="button" aria-label="เปิดเมนู" aria-expanded="false">
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+        <path d="M4 7h16M4 12h16M4 17h16"/>
+      </svg>
+    </button>
     <a class="brand brand--default" href="#/dashboard">
       <span class="brand-mark brand-mark--sm"><img src="./assets/brand/logo-circle.png" alt=""></span>
       <span class="brand__words"><span class="brand__name">02._.admin</span>
@@ -46,8 +51,15 @@ export function consoleLayout({ items = [], title = '', subtitle = '', body = ''
     </div>
   </div>
   <div class="console">
-    <aside class="console__nav">
-      <div class="console__eyebrow">เมนูจัดการ</div>
+    <aside class="console__nav" id="console-nav">
+      <div class="console__nav-head">
+        <span class="console__eyebrow">เมนูจัดการ</span>
+        <button class="nav-close" id="console-nav-close" type="button" aria-label="ปิดเมนู">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+            <path d="M6 6l12 12M18 6L6 18"/>
+          </svg>
+        </button>
+      </div>
       ${items.map((it) => `
         <a href="${it.href}" class="${it.active ? 'is-active' : ''}"${it.active ? ' aria-current="page"' : ''}>
           <span>${e(it.label)}</span>
@@ -59,7 +71,8 @@ export function consoleLayout({ items = [], title = '', subtitle = '', body = ''
       ${subtitle ? `<p class="console__sub">${subtitle}</p>` : ''}
       ${body}
     </section>
-  </div>`;
+  </div>
+  <div class="nav-scrim" id="console-scrim" hidden></div>`;
 }
 
 /* ── โปรไฟล์ของฉัน (แก้ข้อมูล/รหัสผ่าน) ────────────────── */
@@ -165,11 +178,37 @@ async function render() {
     const html = await match.view(arg, { ...ctx, me, settings, route });
     if (html) app.innerHTML = html;
     document.getElementById('profile-btn')?.addEventListener('click', openProfile);
+    bindConsoleNav();
   } catch (err) {
     console.error(err);
     app.innerHTML = `<div class="console__main"><div class="empty-soft"><b>โหลดไม่สำเร็จ</b>
       <p class="tiny dim">${e(err.message || '')}</p></div></div>`;
   }
+}
+
+function bindConsoleNav() {
+  const toggle = document.getElementById('console-nav-toggle');
+  const nav = document.getElementById('console-nav');
+  const scrim = document.getElementById('console-scrim');
+  if (!toggle || !nav) return;
+
+  const setOpen = (open) => {
+    nav.classList.toggle('is-open', open);
+    if (scrim) {
+      scrim.hidden = !open;
+      requestAnimationFrame(() => scrim.classList.toggle('is-open', open));
+    }
+    toggle.setAttribute('aria-expanded', open ? 'true' : 'false');
+    document.body.classList.toggle('nav-open', open);
+  };
+
+  if (toggle.dataset.bound) return;
+  toggle.dataset.bound = '1';
+  toggle.addEventListener('click', () => setOpen(!nav.classList.contains('is-open')));
+  document.getElementById('console-nav-close')?.addEventListener('click', () => setOpen(false));
+  scrim?.addEventListener('click', () => setOpen(false));
+  nav.querySelectorAll('a').forEach((a) => a.addEventListener('click', () => setOpen(false)));
+  document.addEventListener('keydown', (e) => { if (e.key === 'Escape') setOpen(false); });
 }
 
 function renderHeaderState() {

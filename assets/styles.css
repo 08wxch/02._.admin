@@ -3533,17 +3533,46 @@ body[data-shell="console"] .site-footer { display: none; }
 .console__main { padding: 26px 24px 56px; min-width: 0; }
 .console__title { font-family: var(--brand-font); font-size: 26px; margin: 0 0 4px; }
 .console__sub { font-size: 13px; color: var(--muted); margin: 0 0 22px; }
+/* ── คอนโซลจอเล็ก: เมนูเป็นแถบสไลด์ด้านข้าง ───────────── */
+.console__nav-head { display: none; }
+.nav-toggle {
+  display: none; width: 40px; height: 40px; border-radius: 10px;
+  border: 1px solid var(--book-line); background: #fff; color: var(--ink);
+  cursor: pointer; align-items: center; justify-content: center;
+}
+.nav-toggle:hover { background: var(--mint-soft); }
+
 @media (max-width: 900px) {
   .console { grid-template-columns: 1fr; }
+  .nav-toggle { display: inline-flex; }
+  .console__top { gap: 10px; }
+
   .console__nav {
-    position: static; flex-direction: row; overflow-x: auto; padding: 10px 14px;
-    border-bottom: 1px solid var(--book-line); gap: 6px;
+    position: fixed; top: 0; left: 0; bottom: 0; width: min(280px, 82vw);
+    margin: 0; padding: 16px 12px 20px; background: #fff;
+    border-right: 1px solid var(--book-line); box-shadow: 14px 0 40px rgba(20, 18, 15, .12);
+    transform: translateX(-102%); transition: transform .22s cubic-bezier(.16, 1, .3, 1);
+    z-index: 80; overflow-y: auto; flex-direction: column; gap: 3px; display: flex;
   }
-  .console__eyebrow { display: none; }
-  .console__nav a { white-space: nowrap; border: 1px solid var(--book-line); }
-  .console__nav a.is-active { border-color: var(--ink); }
+  .console__nav.is-open { transform: translateX(0); }
+  .console__nav-head {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 2px 6px 12px 8px; margin-bottom: 4px; border-bottom: 1px solid var(--book-line);
+  }
+  .nav-close {
+    width: 34px; height: 34px; border-radius: 9px; border: 1px solid var(--book-line);
+    background: #fff; color: var(--ink); cursor: pointer; display: grid; place-items: center;
+  }
+  .nav-close:hover { background: var(--mint-soft); }
+  .console__nav a { white-space: nowrap; border: 0; }
   .console__main { padding: 18px 16px 44px; }
 }
+.nav-scrim {
+  position: fixed; inset: 0; z-index: 70; background: rgba(10, 9, 7, .4);
+  opacity: 0; transition: opacity .22s ease;
+}
+.nav-scrim.is-open { opacity: 1; }
+body.nav-open { overflow: hidden; }}
 
 /* ══ กราฟเส้นพัฒนาการ ══════════════════════════════════ */
 .line-card { padding: 18px 20px 14px; }
@@ -3741,3 +3770,87 @@ body[data-shell="console"] .site-header { display: none; }
 .profile-btn__text { display: flex; flex-direction: column; line-height: 1.25; text-align: left; }
 .profile-btn__text b { font-size: 13px; font-weight: 600; }
 .console__top { position: sticky; top: 0; z-index: 30; }
+
+/* ══ 02._.admin: หน้าเข้าสู่ระบบ (เฉพาะโซนขวาแบบ 02._.form) ══ */
+.login-shell {
+  min-height: 100vh; display: grid; place-items: center;
+  background: var(--book-paper); padding: 40px 20px;
+}
+.login-main { width: 100%; }
+.login-main__inner { max-width: 460px; margin: 0 auto; }
+.login-card {
+  background: #fff; border: 1px solid var(--book-line); border-radius: 18px;
+  padding: 30px 28px 22px; box-shadow: 0 18px 44px rgba(20, 18, 15, .07);
+}
+.login-eyebrow {
+  font-size: 11px; letter-spacing: .14em; text-transform: uppercase;
+  color: var(--muted-2); font-family: var(--brand-font);
+}
+.login-card h2 { font-family: var(--brand-font); font-size: 26px; margin: 8px 0 6px; }
+.login-lead { font-size: 13.5px; color: var(--muted); margin: 0 0 20px; }
+.login-lead strong { color: var(--ink); }
+.field { margin-bottom: 14px; }
+.field__label { display: block; font-size: 12.5px; color: var(--muted); margin-bottom: 6px; }
+.input-wrap { position: relative; display: flex; align-items: center; }
+.input-wrap > svg { position: absolute; left: 13px; color: var(--muted-2); pointer-events: none; }
+.input-wrap .input, .input-wrap input {
+  width: 100%; padding: 12px 42px 12px 38px; border: 1px solid var(--book-line);
+  border-radius: 11px; background: #fff; font: inherit; font-size: 14.5px; color: var(--ink);
+}
+.input-wrap input:focus { outline: 2px solid color-mix(in srgb, var(--ink) 22%, transparent); border-color: var(--ink); }
+.input-wrap__action {
+  position: absolute; right: 6px; width: 32px; height: 32px; border: 0; background: transparent;
+  color: var(--muted); cursor: pointer; border-radius: 8px; display: grid; place-items: center;
+}
+.input-wrap__action:hover { background: var(--mint-soft); color: var(--ink); }
+.input--lg { min-height: 46px; }
+.form-error {
+  display: none; align-items: center; gap: 6px; margin: 0 0 12px;
+  padding: 9px 12px; border-radius: 10px; background: var(--red-soft); color: var(--red);
+  font-size: 13px;
+}
+.form-error.is-visible { display: flex; }
+.btn-lg { min-height: 48px; font-size: 15px; border-radius: 12px; }
+.btn-block { width: 100%; }
+.login-hint {
+  display: flex; gap: 8px; align-items: flex-start; margin-top: 16px;
+  padding: 11px 13px; border-radius: 11px; background: var(--mint-soft); color: var(--muted);
+}
+.login-hint svg { flex: 0 0 auto; margin-top: 1px; }
+.login-hint p { margin: 0; font-size: 12.5px; line-height: 1.6; }
+.login-card__foot {
+  display: flex; justify-content: space-between; gap: 10px; margin-top: 18px;
+  padding-top: 14px; border-top: 1px solid var(--book-line);
+  font-size: 11.5px; color: var(--muted-2);
+}
+
+/* ══ สลิปรอตรวจ: การ์ดแถวเดียว ══════════════════════════ */
+.slip-row {
+  display: flex; gap: 16px; align-items: flex-start; flex-wrap: wrap;
+  padding: 14px 0; border-bottom: 1px solid var(--book-line);
+}
+.slip-row:last-child { border-bottom: 0; }
+.slip-row__thumb {
+  position: relative; flex: 0 0 auto; width: 96px; height: 126px;
+  border-radius: 10px; overflow: hidden; background: var(--mint-soft);
+  cursor: zoom-in; border: 1px solid var(--book-line);
+}
+.slip-row__thumb .slip-thumb { width: 100%; height: 100%; object-fit: cover; display: block; }
+.slip-row__zoom {
+  position: absolute; inset: auto 0 0 0; padding: 4px 0; text-align: center;
+  font-size: 10.5px; background: rgba(20, 18, 15, .72); color: #fff; opacity: 0; transition: .15s;
+}
+.slip-row__thumb:hover .slip-row__zoom { opacity: 1; }
+.slip-row__info { flex: 1; min-width: 220px; }
+.slip-row__actions { display: flex; gap: 8px; flex-wrap: wrap; align-items: flex-start; }
+.parent-link {
+  border: 0; background: none; padding: 0; font: inherit; cursor: pointer;
+  font-family: var(--brand-font); font-size: 15px; color: var(--ink);
+  text-decoration: underline; text-underline-offset: 3px; text-decoration-thickness: 1px;
+}
+.parent-link:hover { color: var(--green); }
+.slip-lightbox { display: grid; place-items: center; background: var(--surface-soft); border-radius: 12px; padding: 10px; }
+.slip-lightbox img { max-width: 100%; max-height: 72vh; object-fit: contain; border-radius: 8px; }
+
+/* แถบบนของคอนโซล: ขาวขึ้น */
+.console__top { background: #fff; border-bottom: 1px solid var(--book-line); }

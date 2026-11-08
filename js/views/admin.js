@@ -1,6 +1,7 @@
 /* ── หลังบ้านเจ้าของระบบ ───────────────────────────────── */
 
-import { toast, confirmDialog } from '../ui.js';
+import { closeModal, confirmDialog, openModal, toast } from '../ui.js';
+import { openParentDetail } from './students.js';
 import { e, thaiDate, thaiDateTime } from '../utils.js';
 
 export async function renderAdmin(_arg, ctx) {
@@ -71,26 +72,30 @@ function ordersHtml(orders, ctx) {
   const history = orders.filter((o) => o.status !== 'pending_confirm').slice(0, 30);
   return `
   <div class="book-card" style="margin-bottom:20px">
-    <div style="font-family:var(--brand-font);font-size:16px;margin-bottom:10px">รอตรวจสลิป (${pending.length})</div>
+    <div style="font-family:var(--brand-font);font-size:16px;margin-bottom:12px">สลิปรอตรวจ (${pending.length})</div>
     ${pending.length ? pending.map((o) => `
-      <div class="q-row" style="display:flex;gap:16px;flex-wrap:wrap;align-items:flex-start" id="row-${o.id}">
-        <div id="thumb-${o.id}">
-          <div class="slip-thumb" style="display:grid;place-items:center;font-size:11px;color:var(--muted)">กำลังโหลด…</div>
+      <div class="slip-row" id="row-${o.id}">
+        <div class="slip-row__thumb" data-slip-zoom="${o.id}" title="กดเพื่อดูรูปใหญ่">
+          <img class="slip-thumb" src="" alt="สลิป" data-slip-img="${o.id}">
+          <span class="slip-row__zoom">ดูรูปใหญ่</span>
         </div>
-        <div style="flex:1;min-width:220px">
-          <div style="font-family:var(--brand-font);font-size:16px">${e(o.course_title)}</div>
-          <div class="tiny dim">ผู้เรียน ${e(o.student_name || '—')}</div>
-          <div class="tiny dim">ผู้ปกครอง ${e(o.parent?.name || '—')} · ${e(o.parent?.phone || '')} · ${e(o.parent?.line_id || '')}</div>
-          <div class="tiny dim">${e(thaiDateTime(o.created_at))}</div>
-          <div style="margin-top:6px" class="price">${ctx.baht(o.amount)}</div>
+
+        <div class="slip-row__info">
+          <button class="parent-link" data-open-parent="${o.user_id}">${e(o.parent?.name || o.parent?.email || 'ผู้ปกครอง')}</button>
+          <div class="tiny dim">${e(o.parent?.phone || '—')}${o.parent?.line_id ? ` · ${e(o.parent.line_id)}` : ''}</div>
+          <div style="margin-top:8px;font-family:var(--brand-font);font-size:15px">${e(o.course_title)}</div>
+          <div class="tiny dim">ผู้เรียน ${e(o.student_name || '—')} · ${e(thaiDateTime(o.created_at))}</div>
+          ${o.coupon_code ? `<div class="tiny dim">ใช้โค้ด ${e(o.coupon_title || o.coupon_code)} · ประหยัด ${ctx.baht(o.discount || 0)}</div>` : ''}
+          <div class="price" style="margin-top:6px">${ctx.baht(o.amount)}</div>
         </div>
-        <div style="display:flex;gap:8px;flex-wrap:wrap">
+
+        <div class="slip-row__actions">
           <button class="btn btn-ghost btn-sm" data-download="${o.id}">ดาวน์โหลดสลิป</button>
           <button class="btn btn-primary btn-sm" data-confirm="${o.id}">ยืนยัน</button>
           <button class="btn btn-ghost btn-sm" data-reject="${o.id}" style="color:var(--red)">ไม่ผ่าน</button>
         </div>
       </div>`).join('')
-      : `<p class="tiny dim">ยังไม่มีรายการรอยืนยัน</p>`}
+      : `<p class="tiny dim">ยังไม่มีสลิปที่รอตรวจ</p>`}
   </div>
 
   <div class="book-card">
@@ -99,7 +104,8 @@ function ordersHtml(orders, ctx) {
       <thead><tr><th>วันที่</th><th>ผู้ปกครอง</th><th>คอร์ส</th><th>ผู้เรียน</th><th>ยอด</th><th>สถานะ</th></tr></thead>
       <tbody>${history.map((o) => `<tr>
         <td class="tiny">${e(thaiDate(o.created_at))}</td>
-        <td>${e(o.parent?.name || '—')}<div class="tiny dim">${e(o.parent?.email || '')}</div></td>
+        <td><button class="parent-link" data-open-parent="${o.user_id}">${e(o.parent?.name || '—')}</button>
+          <div class="tiny dim">${e(o.parent?.email || '')}</div></td>
         <td>${e(o.course_title)}</td>
         <td>${e(o.student_name || '—')}</td>
         <td>${ctx.baht(o.amount)}</td>
@@ -473,17 +479,39 @@ function bindAdmin(ctx, tab) {
     });
   });
 
-  // โหลดรูปสลิป
-  root.querySelectorAll('[data-confirm]').forEach(async (btn) => {
-    const id = btn.dataset.confirm;
-    const holder = root.querySelector(`#thumb-${id}`);
-    if (!holder) return;
+  // โหลดรูปสลิป + เปิดดูรูปใหญ่ + เปิดข้อมูลผู้ปกครอง
+  const slipUrls = new Map();
+  root.querySelectorAll('[data-slip-img]').forEach(async (img) => {
+    const id = img.dataset.slipImg;
     try {
       const order = (await ctx.data.listAllOrders()).find((o) => o.id === id);
-      if (!order?.slip_path) { holder.innerHTML = '<div class="slip-thumb" style="display:grid;place-items:center;font-size:11px">ไม่มีสลิป</div>'; return; }
+      if (!order?.slip_path) { img.remove(); return; }
       const url = await ctx.data.slipUrl(order.slip_path);
-      holder.innerHTML = `<img class="slip-thumb" src="${e(url)}" alt="สลิป" data-preview="1">`;
-    } catch (err) { holder.innerHTML = '<div class="slip-thumb" style="display:grid;place-items:center;font-size:11px">โหลดไม่ได้</div>'; }
+      slipUrls.set(id, url);
+      img.src = url;
+    } catch (err) { img.remove(); }
+  });
+
+  root.querySelectorAll('[data-slip-zoom]').forEach((box) => {
+    box.addEventListener('click', async () => {
+      const id = box.dataset.slipZoom;
+      let url = slipUrls.get(id);
+      if (!url) {
+        const order = (await ctx.data.listAllOrders()).find((o) => o.id === id);
+        if (order?.slip_path) url = await ctx.data.slipUrl(order.slip_path);
+      }
+      if (!url) { toast('เปิดรูปสลิปไม่สำเร็จ', 'error'); return; }
+      openModal({
+        title: 'สลิปการโอน',
+        size: 'lg',
+        body: `<div class="slip-lightbox"><img src="${e(url)}" alt="สลิปการโอน"></div>`,
+        footer: `<button class="btn btn-ghost" type="button" data-modal-close>ปิด</button>`,
+      });
+    });
+  });
+
+  root.querySelectorAll('[data-open-parent]').forEach((btn) => {
+    btn.addEventListener('click', () => openParentDetail(btn.dataset.openParent, ctx));
   });
 
   // คอร์ส
