@@ -37,6 +37,8 @@ export async function renderAdmin(_arg, ctx) {
 
   ctx._roster = roster;
 
+  const isOwner = ctx.me?.role === 'owner';
+
   const body = tab === 'orders'
     ? ordersHtml(orders, ctx)
     : tab === 'courses'
@@ -128,7 +130,9 @@ function coursesHtml(courses, editId, ctx) {
   const list = `
     <div style="display:flex;justify-content:space-between;gap:12px;align-items:center;margin-bottom:14px;flex-wrap:wrap">
       <div class="tiny dim">ทั้งหมด ${courses.length} คอร์ส</div>
-      <a class="btn btn-primary btn-sm" href="#/dashboard?tab=courses&new=1">+ เพิ่มคอร์ส</a>
+      ${ctx.me?.role === 'owner'
+        ? '<a class="btn btn-primary btn-sm" href="#/dashboard?tab=courses&new=1">+ เพิ่มคอร์ส</a>'
+        : '<span class="chip chip--warn">ดูได้อย่างเดียว — จัดการคอร์สได้เฉพาะเจ้าของระบบ</span>'}
     </div>
     ${courses.length ? `<div class="book-card" style="padding:8px 10px">
       ${courses.map((c) => `
@@ -220,7 +224,9 @@ function couponsHtml(coupons, courses, editId, ctx) {
   return `
   <div style="display:flex;justify-content:space-between;align-items:center;gap:12px;margin-bottom:14px;flex-wrap:wrap">
     <div class="tiny dim">ทั้งหมด ${coupons.length} โค้ด</div>
-    <a class="btn btn-primary btn-sm" href="#/dashboard?tab=coupons&new=1">+ สร้างบัตรส่วนลด</a>
+    ${ctx.me?.role === 'owner'
+      ? '<a class="btn btn-primary btn-sm" href="#/dashboard?tab=coupons&new=1">+ สร้างบัตรส่วนลด</a>'
+      : '<span class="chip chip--warn">ดูได้อย่างเดียว — สร้างบัตรได้เฉพาะเจ้าของระบบ</span>'}
   </div>
   <div class="${showForm ? 'book-grid-2' : ''}">
     <div class="book-card">

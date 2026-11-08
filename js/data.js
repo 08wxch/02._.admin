@@ -7,6 +7,18 @@ let session = null;
 let account = null;
 const listeners = new Set();
 
+
+/** แปลง error จากฐานข้อมูลให้เป็นข้อความที่อ่านรู้เรื่อง */
+function friendly(error) {
+  const msg = String(error?.message || error || '');
+  if (/row-level security|violates row-level/i.test(msg)) {
+    return 'บัญชีนี้ไม่มีสิทธิ์ทำรายการนี้ — การจัดการคอร์ส/บัตรส่วนลด/ตั้งค่า ทำได้เฉพาะเจ้าของระบบ (ล็อกอินด้วยรหัส 02._.math)';
+  }
+  if (/duplicate key/i.test(msg)) return 'มีข้อมูลนี้อยู่แล้ว';
+  if (/permission denied/i.test(msg)) return 'บัญชีนี้ไม่มีสิทธิ์ทำรายการนี้';
+  return msg || 'ทำรายการไม่สำเร็จ';
+}
+
 export function sb() {
   if (!client) {
     client = window.supabase.createClient(CONFIG.SUPABASE_URL, CONFIG.SUPABASE_ANON_KEY, {
@@ -176,7 +188,7 @@ export async function getSettings() {
 
 export async function saveSettings(patch) {
   const { error } = await sb().from('bk_settings').upsert({ id: 1, ...patch, updated_at: new Date().toISOString() });
-  if (error) throw error;
+  if (error) throw new Error(friendly(error));
 }
 
 /* ── courses ──────────────────────────────────────────── */
@@ -210,17 +222,17 @@ export async function saveCourse(patch) {
   };
   if (patch.id) {
     const { error } = await sb().from('bk_courses').update(clean).eq('id', patch.id);
-    if (error) throw error;
+    if (error) throw new Error(friendly(error));
     return patch.id;
   }
   const { data: row, error } = await sb().from('bk_courses').insert(clean).select('id').single();
-  if (error) throw error;
+  if (error) throw new Error(friendly(error));
   return row.id;
 }
 
 export async function deleteCourse(id) {
   const { error } = await sb().from('bk_courses').delete().eq('id', id);
-  if (error) throw error;
+  if (error) throw new Error(friendly(error));
 }
 
 export async function uploadCover(file) {
@@ -285,11 +297,11 @@ export async function saveCoupon(patch) {
   if (!clean.code) throw new Error('กรุณากรอกโค้ด');
   if (patch.id) {
     const { error } = await sb().from('bk_coupons').update(clean).eq('id', patch.id);
-    if (error) throw error;
+    if (error) throw new Error(friendly(error));
     return patch.id;
   }
   const { data, error } = await sb().from('bk_coupons').insert(clean).select('id').single();
-  if (error) throw error;
+  if (error) throw new Error(friendly(error));
   return data.id;
 }
 
@@ -306,7 +318,7 @@ export async function deleteCoupon(id) {
   const { data: row } = await sb().from('bk_coupons').select('image_url').eq('id', id).maybeSingle();
   if (row?.image_url) await removeStorageUrl(row.image_url);
   const { error } = await sb().from('bk_coupons').delete().eq('id', id);
-  if (error) throw error;
+  if (error) throw new Error(friendly(error));
 }
 
 /** ลบไฟล์ใน bucket ออกจาก URL สาธารณะ */
