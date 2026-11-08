@@ -234,7 +234,7 @@ async function render() {
   app.innerHTML = '<div class="page-loader"><span class="spinner"></span></div>';
   try {
     const arg = match.key ? route.parts[match.key] : null;
-    const html = await match.view(arg, { ...ctx, me, settings, route });
+    const html = await match.view(arg, { ...ctx, me, settings, route, blocked: blockedMessage });
     if (html) app.innerHTML = html;
     document.getElementById('profile-btn')?.addEventListener('click', openProfile);
     bindConsoleNav();
@@ -270,15 +270,33 @@ function renderHeaderState() {
   // ไม่มี header เว็บใน 02._.admin — ใช้แถบบนของคอนโซลที่มากับแต่ละหน้า
 }
 
+let blockedMessage = '';
+
+/** เฉพาะครู/เจ้าของระบบเท่านั้นที่เข้า 02._.admin ได้ */
+async function enforceStaffOnly() {
+  const acc = data.getAccount();
+  if (acc && acc.role === 'parent') {
+    const email = acc.email || '';
+    await data.signOut();
+    me = null;
+    ctx.me = null;
+    blockedMessage = `บัญชีผู้ปกครอง (${email}) เข้าใช้งานหลังบ้านไม่ได้ — กรุณาล็อกอินด้วยบัญชีครู/เจ้าของระบบ`;
+    return false;
+  }
+  return true;
+}
+
 async function boot() {
   try { await data.init(); } catch (err) { console.error('เชื่อมต่อฐานข้อมูลไม่สำเร็จ', err); }
   me = data.getAccount();
   ctx.me = me;
+  await enforceStaffOnly();
   try { settings = await data.getSettings(); ctx.settings = settings; } catch (err) { /* ignore */ }
 
   data.onChange(async () => {
     me = data.getAccount();
     ctx.me = me;
+    await enforceStaffOnly();
     try { settings = await data.getSettings(); ctx.settings = settings; } catch (err) { /* ignore */ }
     await render();
   });

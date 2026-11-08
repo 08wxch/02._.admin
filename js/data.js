@@ -22,7 +22,7 @@ function friendly(error) {
 export function sb() {
   if (!client) {
     client = window.supabase.createClient(CONFIG.SUPABASE_URL, CONFIG.SUPABASE_ANON_KEY, {
-      auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: false, storageKey: 'book02_auth_v1' },
+      auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: false, storageKey: 'book02_ADMIN_auth_v1' },
     });
   }
   return client;

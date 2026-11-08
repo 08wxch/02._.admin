@@ -11,6 +11,8 @@ export async function renderTeacherAuth(_arg, ctx) {
           <h2>เข้าสู่ระบบ</h2>
           <p class="login-lead">ใช้บัญชีเดียวกับระบบ <strong>02._.mock</strong></p>
 
+          ${_arg?.blocked || ctx.blocked ? `<div class="form-error is-visible" style="margin-bottom:12px"><span>${( _arg?.blocked || ctx.blocked )}</span></div>` : ''}
+
           <form class="login-form" id="login-form" novalidate>
             <div class="field">
               <label class="field__label" for="t-code">รหัสครู หรือ ชื่อ–นามสกุล</label>
