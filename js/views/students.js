@@ -94,6 +94,55 @@ async function studentList(ctx) {
   });
 }
 
+
+/** เปิดหน้าต่างเลือกนักเรียนในหน่วยงาน เพื่อผูกกับบัญชีผู้ปกครองคนนี้ */
+export async function openAddStudent(parentId, ctx) {
+  let roster = { students: [] };
+  try { roster = await ctx.data.listMockRoster(); } catch (err) { roster = { students: [] }; }
+  const students = roster?.students || [];
+  const orgName = (id) => ((roster.organizations || []).find((o) => o.id === id)?.name || id || '');
+
+  openModal({
+    title: 'เพิ่มบัญชีนักเรียน',
+    size: 'sm',
+    body: `
+      <p class="tiny dim" style="margin:0 0 10px">เลือกนักเรียนในหน่วยงานของคุณ เพื่อผูกกับบัญชีผู้ปกครองคนนี้</p>
+      ${students.length ? `
+        <input class="input" id="as-search" placeholder="ค้นหาชื่อ/รหัสนักเรียน" style="margin-bottom:10px">
+        <div class="school-list" id="as-list">
+          ${students.map((s) => `<button class="pick-row" data-pick-student="${s.id}">
+            <b>${e(s.name || s.id)}</b>
+            <span class="tiny dim">${e(s.code || '')}${s.class ? ` · ${e(s.class)}` : ''}${s.orgName || orgName(s.orgId) ? ` · ${e(s.orgName || orgName(s.orgId))}` : ''}</span>
+          </button>`).join('')}
+        </div>`
+        : '<p class="tiny dim">ยังไม่มีนักเรียนในหน่วยงานของคุณ — เพิ่มนักเรียนใน 02._.mock ก่อน</p>'}
+      <p class="hint" style="margin-top:10px">ถ้าต้องการเพิ่มหลายคน ทำให้ทีละคนได้เลย</p>`,
+    onMount: (root) => {
+      const search = root.querySelector('#as-search');
+      search?.addEventListener('input', () => {
+        const q = search.value.trim().toLowerCase();
+        root.querySelectorAll('[data-pick-student]').forEach((el) => {
+          el.style.display = el.innerText.toLowerCase().includes(q) ? '' : 'none';
+        });
+      });
+      root.querySelectorAll('[data-pick-student]').forEach((btn) => {
+        btn.addEventListener('click', async () => {
+          btn.disabled = true;
+          try {
+            await ctx.data.linkParentStudent(btn.dataset.pickStudent, parentId);
+            toast('ผูกนักเรียนให้ผู้ปกครองแล้ว', 'success');
+            closeModal();
+            location.reload();
+          } catch (err) {
+            btn.disabled = false;
+            toast(err.message || 'ผูกไม่สำเร็จ', 'error');
+          }
+        });
+      });
+    },
+  });
+}
+
 /* ── รายละเอียดนักเรียน 1 คน ───────────────────────────── */
 async function studentDetail(studentId, ctx) {
   const [report, students, parents] = await Promise.all([
@@ -298,6 +347,11 @@ export async function openParentDetail(userId, ctx) {
           } catch (err) { toast(err.message || 'ไม่สำเร็จ', 'error'); }
         });
       });
+      root.querySelector('#pd-add-student')?.addEventListener('click', () => {
+        closeModal();
+        openAddStudent(userId, ctx);
+      });
+
       root.querySelector('#pd-org-add')?.addEventListener('change', async (ev) => {
         const id = ev.currentTarget.value;
         if (!id) return;

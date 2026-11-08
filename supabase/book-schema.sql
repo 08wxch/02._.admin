@@ -1172,3 +1172,96 @@ end;
 $$;
 
 grant execute on function public.bk_set_teacher_password(text) to authenticated;
+
+-- รายชื่อครูทั้งหมดจาก 02._.mock (ไม่รวมอีเมลส่วนตัว)
+create or replace function public.bk_teachers_list()
+returns jsonb language plpgsql stable security definer set search_path = public as $$
+declare v_state jsonb; v_out jsonb := '[]'::jsonb; t jsonb;
+begin
+  if not (public.bk_is_owner() or public.bk_is_teacher()) then raise exception 'ไม่มีสิทธิ์'; end if;
+  select data into v_state from public.app_state where id = 'main';
+  if v_state is null then return '[]'::jsonb; end if;
+
+  for t in select value from jsonb_array_elements(coalesce(v_state->'teachers','[]'::jsonb)) value loop
+    v_out := v_out || jsonb_build_array(jsonb_build_object(
+      'code', t->>'code',
+      'name', coalesce(t->>'name',''),
+      'orgId', coalesce(t->>'orgId',''),
+      'orgName', coalesce((select o->>'name' from jsonb_array_elements(coalesce(v_state->'organizations','[]'::jsonb)) o where o->>'id' = t->>'orgId' limit 1), ''),
+      'school', coalesce(t->>'school',''),
+      'subject', coalesce(t->>'subject',''),
+      'phone', coalesce(t->>'phone',''),
+      'isOwner', coalesce((t->>'isOwner')::boolean, false),
+      'accountName', coalesce((select a.name from public.bk_accounts a where lower(a.teacher_code) = lower(t->>'code') limit 1), '')
+    ));
+  end loop;
+  return v_out;
+end;
+$$;
+
+grant execute on function public.bk_teachers_list() to authenticated;
+
+-- เก็บชื่อจริง–นามสกุลของครูจาก 02._.mock ไว้แสดงในโปรไฟล์ (ไม่เก็บอีเมล)
+create or replace function public.bk_teacher_login(p_code text, p_password text)
+returns jsonb language plpgsql security definer set search_path = public, auth, extensions as $$
+declare
+  v_t jsonb; v_email text; v_id uuid; v_role text; v_code text;
+begin
+  select t into v_t
+  from public.app_state s, jsonb_array_elements(coalesce(s.data->'teachers','[]'::jsonb)) t
+  where s.id = 'main'
+    and (lower(t->>'code') = lower(trim(coalesce(p_code,'')))
+         or lower(coalesce(t->>'email','')) = lower(trim(coalesce(p_code,'')))
+         or lower(coalesce(t->>'name','')) = lower(trim(coalesce(p_code,''))))
+  limit 1;
+  if v_t is null then raise exception 'ไม่พบรหัสครูนี้ในรายชื่อบุคลากร'; end if;
+
+  if not exists (
+    select 1 from public.credentials c
+    where c.owner_type = 'teacher' and c.owner_id = coalesce(v_t->>'id','')
+      and c.password = coalesce(p_password,'')
+  ) then
+    raise exception 'รหัสผ่านไม่ถูกต้อง (ใช้รหัสเดียวกับ 02._.mock)';
+  end if;
+
+  v_code := coalesce(v_t->>'code','');
+  v_email := public.bk_teacher_email(v_code);
+  v_role := case when coalesce((v_t->>'isOwner')::boolean,false) then 'owner' else 'teacher' end;
+
+  select id into v_id from auth.users where email = v_email;
+  if v_id is null then
+    v_id := gen_random_uuid();
+    insert into auth.users (id, instance_id, aud, role, email, encrypted_password, email_confirmed_at,
+                            raw_app_meta_data, raw_user_meta_data, created_at, updated_at,
+                            confirmation_token, recovery_token, email_change, email_change_token_new,
+                            email_change_token_current, phone_change, phone_change_token, is_sso_user, is_anonymous)
+    values (v_id, '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated', v_email,
+            crypt(p_password, gen_salt('bf')), now(),
+            '{"provider":"email","providers":["email"]}'::jsonb,
+            jsonb_build_object('full_name', coalesce(v_t->>'name','')), now(), now(),
+            '', '', '', '', '', '', '', false, false);
+    insert into auth.identities (id, user_id, identity_data, provider, provider_id, last_sign_in_at, created_at, updated_at)
+    values (gen_random_uuid(), v_id,
+            jsonb_build_object('sub', v_id::text, 'email', v_email, 'email_verified', true),
+            'email', v_id::text, now(), now(), now()) on conflict do nothing;
+  else
+    update auth.users set encrypted_password = crypt(p_password, gen_salt('bf')),
+           email_confirmed_at = coalesce(email_confirmed_at, now()), updated_at = now()
+     where id = v_id;
+  end if;
+
+  insert into public.bk_accounts (user_id, role, name, email, teacher_code, org_id, org_hint, approved)
+  values (v_id, v_role, coalesce(v_t->>'name',''), '', v_code,
+          coalesce(v_t->>'orgId',''), coalesce(v_t->>'school',''), true)
+  on conflict (user_id) do update set
+    name = coalesce(v_t->>'name',''),
+    email = '',
+    teacher_code = v_code,
+    org_id = coalesce(v_t->>'orgId',''),
+    org_hint = coalesce(v_t->>'school',''),
+    role = case when v_role = 'owner' then 'owner' else public.bk_accounts.role end,
+    updated_at = now();
+
+  return jsonb_build_object('ok', true, 'email', v_email, 'role', v_role, 'name', coalesce(v_t->>'name',''));
+end;
+$$;

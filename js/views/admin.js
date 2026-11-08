@@ -1,14 +1,14 @@
 /* ── หลังบ้านเจ้าของระบบ ───────────────────────────────── */
 
 import { closeModal, confirmDialog, openModal, toast } from '../ui.js';
-import { openParentDetail } from './students.js';
+import { openAddStudent, openParentDetail } from './students.js';
 import { e, thaiDate, thaiDateTime } from '../utils.js';
 
 export async function renderAdmin(_arg, ctx) {
   const tab = ctx.route?.query.get('tab') || 'orders';
   const editId = ctx.route?.query.get('edit') || '';
 
-  const [orders, courses, accounts, links, roster, coupons, orgs] = await Promise.all([
+  const [orders, courses, accounts, links, roster, coupons, orgs, teachersMock, studentsOverviewData] = await Promise.all([
     ctx.data.listAllOrders(),
     ctx.data.listCourses({ all: true }),
     ctx.data.listAccounts(),
@@ -16,6 +16,8 @@ export async function renderAdmin(_arg, ctx) {
     ctx.data.listMockRoster().catch(() => ({ students: [], organizations: [] })),
     ctx.data.listCoupons().catch(() => []),
     ctx.data.listOrganizations().catch(() => []),
+    ctx.data.teachersList().catch(() => []),
+    ctx.data.studentsOverview().catch(() => []),
   ]);
 
   const parents = accounts.filter((a) => a.role === 'parent');
@@ -24,12 +26,13 @@ export async function renderAdmin(_arg, ctx) {
   const paid = orders.filter((o) => o.status === 'confirmed').reduce((s, o) => s + Number(o.amount || 0), 0);
 
   const items = [
-    { id: 'orders', label: 'รอยืนยัน', count: pendingCount || '' },
-    { id: 'courses', label: 'คอร์สเรียน' },
-    { id: 'coupons', label: 'บัตรส่วนลด' },
-    { id: 'users', label: 'ผู้ใช้งาน' },
-    { id: 'links', label: 'ผูกนักเรียน' },
-    { id: 'settings', label: 'ตั้งค่า' },
+    { id: 'orders', label: 'รอยืนยัน', icon: 'orders', count: pendingCount || '' },
+    { id: 'courses', label: 'คอร์สเรียน', icon: 'courses' },
+    { id: 'coupons', label: 'บัตรส่วนลด', icon: 'coupons' },
+    { id: 'teachers', label: 'ครู', icon: 'teachers', group: 'people' },
+    { id: 'parents', label: 'ผู้ปกครอง', icon: 'parents', group: 'people' },
+    { id: 'students', label: 'นักเรียน', icon: 'students', group: 'people' },
+    { id: 'settings', label: 'ตั้งค่า', icon: 'settings', group: 'config' },
   ].map((it) => ({ ...it, href: `#/dashboard?tab=${it.id}`, active: tab === it.id }));
 
   ctx._roster = roster;
@@ -40,11 +43,13 @@ export async function renderAdmin(_arg, ctx) {
       ? coursesHtml(courses, editId, ctx)
       : tab === 'coupons'
         ? couponsHtml(coupons, courses, editId, ctx)
-        : tab === 'users'
-        ? usersHtml(scopeParents(parents, links, ctx), teachers, ctx, orgs)
-        : tab === 'links'
-          ? linksHtml(parents, links, roster, ctx)
-          : settingsHtml(ctx);
+        : tab === 'teachers'
+          ? teachersHtml(teachersMock, ctx, orgs)
+          : tab === 'parents' || tab === 'users' || tab === 'links'
+            ? parentsHtml(scopeParents(parents, links, ctx), links, ctx, orgs)
+            : tab === 'students'
+              ? studentsHtml(studentsOverviewData, ctx, orgs)
+              : settingsHtml(ctx);
 
   const html = ctx.consoleLayout({
     items,
@@ -120,28 +125,66 @@ function coursesHtml(courses, editId, ctx) {
   const editing = courses.find((c) => c.id === editId);
   const open = Boolean(editing) || ctx.route?.query.get('new') === '1';
 
-  const form = open ? `
-    <div class="book-card">
+  const list = `
+    <div style="display:flex;justify-content:space-between;gap:12px;align-items:center;margin-bottom:14px;flex-wrap:wrap">
+      <div class="tiny dim">ทั้งหมด ${courses.length} คอร์ส</div>
+      <a class="btn btn-primary btn-sm" href="#/dashboard?tab=courses&new=1">+ เพิ่มคอร์ส</a>
+    </div>
+    ${courses.length ? `<div class="book-card" style="padding:8px 10px">
+      ${courses.map((c) => `
+        <div class="pair-row">
+          <a class="pair-row__left" href="#/course/${c.id}">
+            <span class="pair-row__avatar">${c.image_url
+              ? `<img src="${e(c.image_url)}" alt="" style="width:100%;height:100%;object-fit:cover;border-radius:50%">`
+              : e((c.title || '?').charAt(0))}</span>
+            <span class="pair-row__text">
+              <b>${e(c.title)}</b>
+              <span class="tiny dim">${ctx.baht(c.price)} · ${c.seats ? `${c.seats} ที่นั่ง` : 'ไม่จำกัดที่นั่ง'}${c.active ? '' : ' · ปิดขาย'}</span>
+            </span>
+          </a>
+          <div class="pair-row__right">
+            <a class="btn btn-ghost btn-sm" href="#/dashboard?tab=courses&edit=${c.id}">แก้ไข</a>
+            <button class="btn btn-ghost btn-sm" data-del-course="${c.id}" style="color:var(--red)">ลบ</button>
+          </div>
+        </div>`).join('')}
+    </div>` : `<div class="empty-soft"><b>ยังไม่มีคอร์ส</b>
+      <a class="btn btn-primary btn-sm" href="#/dashboard?tab=courses&new=1">เพิ่มคอร์สแรก</a></div>`}`;
+
+  if (!open) return list;
+
+  const preview = editing
+    ? ctx.courseCardForAdmin({ ...editing, left: editing.seats ? Math.max(0, editing.seats - (editing.sold || 0)) : null })
+    : `<div class="empty-soft" style="padding:40px 22px"><b>ตัวอย่างคอร์สจะขึ้นที่นี่</b>
+         <p class="tiny dim" style="margin:0">กรอกข้อมูลด้านขวาแล้วกดบันทึก ระบบจะแสดงตัวอย่างเหมือนที่ผู้ปกครองเห็น</p></div>`;
+
+  return `
+  <div class="course-editor">
+    <div class="course-editor__preview">
+      <div class="tiny dim" style="margin-bottom:8px">ตัวอย่างที่ผู้ปกครองเห็น</div>
+      ${preview}
+      <div style="margin-top:12px"><a class="btn btn-ghost btn-sm" href="#/dashboard?tab=courses">← กลับรายการคอร์ส</a></div>
+    </div>
+
+    <div class="book-card course-editor__form">
       <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;margin-bottom:10px">
         <div style="font-family:var(--brand-font);font-size:16px">${editing ? 'แก้ไขคอร์ส' : 'เพิ่มคอร์สใหม่'}</div>
-        <a class="btn btn-ghost btn-sm" href="#/dashboard?tab=courses">ปิด</a>
       </div>
       <input type="hidden" id="c-id" value="${editing ? editing.id : ''}">
-      <div class="field-row"><label>ชื่อคอร์ส</label><input id="c-title" value="${e(editing?.title || '')}" placeholder="เช่น คณิตศาสตร์ ม.ปลาย"></div>
-      <div class="field-row"><label>คำโปรยสั้น</label><input id="c-sub" value="${e(editing?.subtitle || '')}" placeholder="หนึ่งบรรทัด บอกจุดเด่น"></div>
-      <div class="field-row"><label>รายละเอียด</label><textarea id="c-detail" placeholder="อธิบายว่าเรียนอะไร ได้อะไร">${e(editing?.detail || '')}</textarea></div>
+      <div class="field-row"><label>ชื่อคอร์ส</label><input id="c-title" value="${e(editing?.title || '')}"></div>
+      <div class="field-row"><label>คำโปรยสั้น</label><input id="c-sub" value="${e(editing?.subtitle || '')}"></div>
+      <div class="field-row"><label>รายละเอียด</label><textarea id="c-detail">${e(editing?.detail || '')}</textarea></div>
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
         <div class="field-row"><label>ราคา (บาท)</label><input id="c-price" type="number" min="0" step="50" value="${Number(editing?.price || 0)}"></div>
-        <div class="field-row"><label>ระดับชั้น</label><input id="c-level" value="${e(editing?.level || '')}" placeholder="เช่น ม.4–ม.6"></div>
+        <div class="field-row"><label>ระดับชั้น</label><input id="c-level" value="${e(editing?.level || '')}" placeholder="ม.4–ม.6"></div>
       </div>
       <div class="field-row">
         <label>จำนวนที่นั่ง</label>
         <label class="check-line">
           <input type="checkbox" id="c-unlimited" ${!editing || !Number(editing?.seats) ? 'checked' : ''}>
-          <span>ไม่จำกัดจำนวนคน (เรียนได้เรื่อย ๆ)</span>
+          <span>ไม่จำกัดจำนวนคน</span>
         </label>
         <input id="c-seats" type="number" min="1" value="${Number(editing?.seats || 8)}"
-          ${!editing || !Number(editing?.seats) ? 'disabled' : ''} placeholder="เช่น 8">
+          ${!editing || !Number(editing?.seats) ? 'disabled' : ''}>
       </div>
       <details style="margin:10px 0">
         <summary class="tiny dim" style="cursor:pointer">รายละเอียดเพิ่มเติม (ไม่บังคับ)</summary>
@@ -149,7 +192,6 @@ function coursesHtml(courses, editId, ctx) {
           <div class="field-row"><label>ชั่วโมงเรียน</label><input id="c-hours" type="number" min="0" value="${Number(editing?.hours || 0)}"></div>
           <div class="field-row"><label>จำนวนครั้ง/ชุด</label><input id="c-lessons" type="number" min="0" value="${Number(editing?.lessons || 0)}"></div>
         </div>
-        <p class="hint">คอร์สแบบขายเป็นชุดแบบฝึกหัดไม่ต้องใส่ก็ได้ — ใส่แค่ชื่อ/รายละเอียด/ราคาก็พอ</p>
       </details>
       <div class="field-row"><label>รูปปก (แนะนำ 1200×675 px)</label>
         <input type="file" id="c-img-file" accept="image/*">
@@ -161,43 +203,8 @@ function coursesHtml(courses, editId, ctx) {
         <button class="btn btn-primary" id="c-save">${editing ? 'บันทึกการแก้ไข' : 'บันทึกคอร์ส'}</button>
         <a class="btn btn-ghost" href="#/dashboard?tab=courses">ยกเลิก</a>
       </div>
-    </div>` : '';
-
-  const preview = editing ? `
-    <div class="book-card" style="margin-top:14px">
-      <div style="font-family:var(--brand-font);font-size:16px;margin-bottom:10px">ตัวอย่างที่ผู้ปกครองเห็น</div>
-      ${ctx.courseCard({ ...editing, left: editing.seats ? Math.max(0, editing.seats - (editing.sold || 0)) : null })}
-    </div>` : '';
-
-  return `
-  <div style="display:flex;justify-content:space-between;gap:12px;align-items:center;margin-bottom:14px;flex-wrap:wrap">
-    <div class="tiny dim">ทั้งหมด ${courses.length} คอร์ส</div>
-    <a class="btn btn-primary btn-sm" href="#/dashboard?tab=courses&new=1">+ เพิ่มคอร์ส</a>
-  </div>
-
-  <div class="${open ? 'book-grid-2' : ''}">
-    <div>
-      ${courses.length ? `<div class="book-card" style="padding:8px 10px">
-        ${courses.map((c) => `
-          <div class="student-row">
-            <a class="student-row__main" href="#/course/${c.id}">
-              <span class="student-row__avatar">${c.image_url ? `<img src="${e(c.image_url)}" alt="" style="width:100%;height:100%;object-fit:cover;border-radius:50%">` : e((c.title || '?').charAt(0))}</span>
-              <span class="student-row__name">
-                <b>${e(c.title)}</b>
-                <span class="tiny dim">${ctx.baht(c.price)} · ${c.seats ? `${c.seats} ที่นั่ง` : 'ไม่จำกัดที่นั่ง'}${c.active ? '' : ' · ปิดขาย'}</span>
-              </span>
-            </a>
-            <div style="display:flex;gap:6px">
-              <a class="btn btn-ghost btn-sm" href="#/dashboard?tab=courses&edit=${c.id}">แก้ไข</a>
-              <button class="btn btn-ghost btn-sm" data-del-course="${c.id}" style="color:var(--red)">ลบ</button>
-            </div>
-          </div>`).join('')}
-      </div>` : `<div class="empty-soft"><b>ยังไม่มีคอร์ส</b>
-        <a class="btn btn-primary btn-sm" href="#/dashboard?tab=courses&new=1">เพิ่มคอร์สแรก</a></div>`}
     </div>
-    ${form}
-  </div>
-  ${preview}`;
+  </div>`;
 }
 
 /* ── บัตรส่วนลด ───────────────────────────────────────── */
@@ -311,96 +318,116 @@ function scopeParents(parents, links, ctx) {
   return parents.filter((p) => ok.has(p.user_id) || (p.org_ids || []).includes(myOrg));
 }
 
-/* ── ผู้ใช้งาน ───────────────────────────────────────── */
-function usersHtml(parents, teachers, ctx, orgs = []) {
-  const orgFilter = ctx.route?.query.get('uorg') || '';
-  const orgName = (id) => orgs.find((o) => o.id === id)?.name || id || '';
-  const matchOrg = (a) => !orgFilter || (a.org_id === orgFilter) || (a.org_ids || []).includes(orgFilter);
-  const pList = parents.filter(matchOrg);
-  const tList = teachers.filter(matchOrg);
-
+/* ── ครู (จาก 02._.mock) ─────────────────────────────── */
+function teachersHtml(teachers, ctx, orgs) {
+  const orgName = (id) => orgs.find((o) => o.id === id)?.name || id || '—';
   return `
-  <div class="book-card" style="margin-bottom:14px;padding:14px 16px">
-    <div style="display:flex;gap:12px;align-items:center;flex-wrap:wrap">
-      <label class="tiny dim">กรองตามหน่วยงาน/โรงเรียน</label>
-      <select id="user-org" style="min-width:260px">
-        <option value="">ทั้งหมด</option>
-        ${orgs.map((o) => `<option value="${o.id}" ${orgFilter === o.id ? 'selected' : ''}>${e(o.name)}</option>`).join('')}
-      </select>
-    </div>
-  </div>
-
-  <div class="book-card" style="margin-bottom:18px">
-    <div style="font-family:var(--brand-font);font-size:16px;margin-bottom:8px">ผู้ปกครอง (${pList.length})</div>
-    ${pList.length ? `<div class="table-wrap"><table class="book-table">
-      <thead><tr><th>ชื่อ</th><th>ติดต่อ</th><th>โรงเรียน/หน่วยงานของลูก</th><th></th></tr></thead>
-      <tbody>${pList.map((a) => `<tr>
-        <td><b>${e(a.name || '—')}</b><div class="tiny dim">${e(a.email || '')}</div></td>
-        <td class="tiny">${e(a.phone || '—')}<div class="tiny dim">${e(a.line_id || '')}</div></td>
-        <td class="tiny">${(a.org_ids || []).length ? (a.org_ids || []).map((id) => `<span class="chip chip--mute" style="margin-right:4px">${e(orgName(id))}</span>`).join('') : '<span class="dim">ยังไม่เลือก</span>'}</td>
-        <td><button class="btn btn-ghost btn-sm" data-open-parent="${a.user_id}">ดูรายละเอียด</button></td>
-      </tr>`).join('')}</tbody>
-    </table></div>` : '<p class="tiny dim">ไม่มีผู้ปกครองในหน่วยงานนี้</p>'}
-  </div>
-
   <div class="book-card">
-    <div style="font-family:var(--brand-font);font-size:16px;margin-bottom:8px">ครู (${tList.length})</div>
-    ${tList.length ? `<div class="table-wrap"><table class="book-table">
-      <thead><tr><th>รหัสครู (จาก 02._.mock)</th><th>ชื่อที่แสดง</th><th>ติดต่อ</th><th>หน่วยงาน</th></tr></thead>
-      <tbody>${tList.map((a) => `<tr>
-        <td><b>${e(a.teacher_code || '—')}</b></td>
-        <td class="tiny">${a.name ? e(a.name) : '<span class="dim">—</span>'}</td>
-        <td class="tiny">${e(a.phone || '—')}<div class="tiny dim">${e(a.line_id || '')}</div></td>
-        <td class="tiny">${e(orgName(a.org_id) || '—')}</td>
+    <div style="display:flex;justify-content:space-between;align-items:baseline;gap:12px;flex-wrap:wrap;margin-bottom:10px">
+      <div style="font-family:var(--brand-font);font-size:16px">ครูทั้งหมด (${teachers.length})</div>
+      <div class="tiny dim">ข้อมูลจากรายชื่อบุคลากรใน 02._.mock</div>
+    </div>
+    ${teachers.length ? `<div class="table-wrap"><table class="book-table">
+      <thead><tr><th>รหัสครู</th><th>ชื่อ–นามสกุล</th><th>โรงเรียน / หน่วยงาน</th><th>ติดต่อ</th></tr></thead>
+      <tbody>${teachers.map((t) => `<tr>
+        <td><b>${e(t.code || '—')}</b></td>
+        <td>${e(t.name || '—')}${t.isOwner ? ' <span class="chip chip--ok">เจ้าของระบบ</span>' : ''}</td>
+        <td class="tiny">${e(t.orgName || orgName(t.orgId))}</td>
+        <td class="tiny">${e(t.phone || '—')}</td>
       </tr>`).join('')}</tbody>
-    </table></div>` : '<p class="tiny dim">ไม่มีครูในหน่วยงานนี้</p>'}
-    <p class="hint" style="margin-top:10px">ข้อมูลครูซิงก์จากรายชื่อบุคลากรใน 02._.mock อัตโนมัติตอนล็อกอิน</p>
+    </table></div>` : '<p class="tiny dim">ไม่พบรายชื่อครูใน 02._.mock</p>'}
   </div>`;
 }
 
-/* ── ผูกนักเรียน (ทางลัด: ไปหน้ารายชื่อนักเรียน) ──────── */
-function linksHtml(parents, links, roster, ctx) {
-  const students = roster?.students || [];
+/* ── ผู้ปกครอง ───────────────────────────────────────── */
+function parentsHtml(parents, links, ctx, orgs) {
+  const orgFilter = ctx.route?.query.get('porg') || '';
+  const orgName = (id) => orgs.find((o) => o.id === id)?.name || id || '';
   const byParent = {};
   links.forEach((l) => { (byParent[l.user_id] = byParent[l.user_id] || []).push(l); });
 
-  return `
-  <div class="book-card" style="margin-bottom:18px">
-    <div style="display:flex;justify-content:space-between;gap:12px;align-items:center;flex-wrap:wrap">
-      <div>
-        <div style="font-family:var(--brand-font);font-size:16px">ผูกนักเรียนกับผู้ปกครอง</div>
-        <p class="tiny dim" style="margin:6px 0 0">แนะนำให้ทำที่หน้า <b>รายชื่อนักเรียน</b> — เลือกหน่วยงานก่อน แล้วค่อยผูกทีละคน</p>
-      </div>
-      <a class="btn btn-primary btn-sm" href="#/students">ไปที่รายชื่อนักเรียน</a>
-    </div>
+  const shown = orgFilter
+    ? parents.filter((p) => (p.org_ids || []).includes(orgFilter)
+        || (byParent[p.user_id] || []).some((l) => l.org_id === orgFilter))
+    : parents;
 
-    <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:flex-end;margin-top:16px">
-      <div class="field-row" style="flex:1;min-width:220px;margin:0">
-        <label>ผู้ปกครอง</label>
-        <select id="link-parent">${parents.map((p) => `<option value="${p.user_id}">${e(p.name || p.email)} · ${e(p.email || '')}</option>`).join('')}</select>
-      </div>
-      <div class="field-row" style="flex:1;min-width:220px;margin:0">
-        <label>นักเรียน</label>
-        <select id="link-student">${students.map((s) => `<option value="${s.id}">${e(s.name)} · ${e(s.code)} · ${e(s.orgName || '')}</option>`).join('')}</select>
-      </div>
-      <button class="btn btn-primary" id="link-add">ผูกให้ผู้ปกครอง</button>
-    </div>
+  return `
+  <div class="filter-bar">
+    <span class="filter-bar__icon">
+      <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 4h18l-7 8v6l-4 2v-8z"/></svg>
+    </span>
+    <select id="parent-org" class="filter-select">
+      <option value="">ผู้ปกครองทั้งหมด (${parents.length})</option>
+      ${orgs.map((o) => `<option value="${o.id}" ${orgFilter === o.id ? 'selected' : ''}>${e(o.name)}</option>`).join('')}
+    </select>
   </div>
 
-  <div class="book-card">
-    <div style="font-family:var(--brand-font);font-size:16px;margin-bottom:8px">การผูกทั้งหมด (${links.length})</div>
-    ${links.length ? `<div class="table-wrap"><table class="book-table">
-      <thead><tr><th>ผู้ปกครอง</th><th>นักเรียน</th><th>โรงเรียน/หน่วยงาน</th><th></th></tr></thead>
-      <tbody>${links.map((l) => {
-        const p = parents.find((x) => x.user_id === l.user_id);
-        return `<tr>
-          <td><b>${e(p?.name || l.user_id)}</b><div class="tiny dim">${e(p?.email || '')}</div></td>
-          <td>${e(l.student_name || l.student_id)}<div class="tiny dim">${e(l.student_code || '')}</div></td>
-          <td class="tiny">${e(l.org_id || '—')}</td>
-          <td><button class="btn btn-ghost btn-sm" data-unlink="${l.id}" style="color:var(--red)">เอาออก</button></td>
-        </tr>`; }).join('')}</tbody>
-    </table></div>` : '<p class="tiny dim">ยังไม่มีการผูกนักเรียน</p>'}
-  </div>`;
+  ${shown.length ? `<div class="book-card" style="padding:8px 10px">
+    ${shown.map((p) => `
+      <div class="pair-row">
+        <button class="pair-row__left" data-open-parent="${p.user_id}">
+          <span class="pair-row__avatar">${e((p.name || p.email || '?').trim().charAt(0))}</span>
+          <span class="pair-row__text">
+            <b>${e(p.name || p.email || 'ผู้ปกครอง')}</b>
+            <span class="tiny dim">${e(p.phone || '—')}${p.line_id ? ` · ${e(p.line_id)}` : ''}</span>
+          </span>
+        </button>
+        <div class="pair-row__right">
+          ${(byParent[p.user_id] || []).length
+            ? (byParent[p.user_id] || []).map((l) => `
+                <span class="chip chip--mute">${e(l.student_name || l.student_id)}${l.org_id ? ` · ${e(orgName(l.org_id))}` : ''}</span>`).join('')
+            : `<button class="btn btn-primary btn-sm" data-add-student="${p.user_id}">+ เพิ่มบัญชีนักเรียน</button>`}
+        </div>
+      </div>`).join('')}
+  </div>` : `<div class="empty-soft"><b>ไม่พบผู้ปกครอง</b><p class="tiny dim" style="margin:0">ลองเลือกโรงเรียน/หน่วยงานอื่น</p></div>`}`;
+}
+
+/* ── นักเรียน ────────────────────────────────────────── */
+function studentsHtml(students, ctx, orgs) {
+  const orgFilter = ctx.route?.query.get('sorg') || '';
+  const classFilter = ctx.route?.query.get('sclass') || '';
+  const orgName = (id) => orgs.find((o) => o.id === id)?.name || id || '';
+
+  // รายการ class ที่มีจริง (อ้างจากนักเรียนในหน่วยงานที่เลือก)
+  const inOrg = orgFilter ? students.filter((s) => s.orgId === orgFilter) : students;
+  const classes = [...new Set(inOrg.map((s) => s.class).filter(Boolean))].sort();
+
+  const shown = inOrg.filter((s) => !classFilter || s.class === classFilter);
+  const label = [orgFilter ? orgName(orgFilter) : 'ทุกโรงเรียน/หน่วยงาน', classFilter || 'ทุก class'].join(' | ');
+
+  return `
+  <div class="filter-bar">
+    <span class="filter-bar__icon">
+      <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 4h18l-7 8v6l-4 2v-8z"/></svg>
+    </span>
+    <select id="student-org" class="filter-select">
+      <option value="">ทุกโรงเรียน/หน่วยงาน (${students.length})</option>
+      ${orgs.map((o) => `<option value="${o.id}" ${orgFilter === o.id ? 'selected' : ''}>${e(o.name)}</option>`).join('')}
+    </select>
+    <select id="student-class" class="filter-select" ${orgFilter ? '' : 'disabled title="เลือกโรงเรียน/หน่วยงานก่อน"'}>
+      <option value="">ทุก class${orgFilter ? ` (${inOrg.length})` : ''}</option>
+      ${classes.map((c) => `<option value="${e(c)}" ${classFilter === c ? 'selected' : ''}>${e(c)}</option>`).join('')}
+    </select>
+    <span class="filter-bar__label">${e(label)}</span>
+  </div>
+
+  ${shown.length ? `<div class="book-card" style="padding:8px 10px">
+    ${shown.map((st) => `
+      <div class="pair-row">
+        <a class="pair-row__left" href="#/students/${encodeURIComponent(st.id)}">
+          <span class="pair-row__avatar">${e((st.name || '?').trim().charAt(0))}</span>
+          <span class="pair-row__text">
+            <b>${e(st.name || st.id)}</b>
+            <span class="tiny dim">${e(st.code || '')} · ${e(orgName(st.orgId))}</span>
+          </span>
+        </a>
+        <div class="pair-row__right">
+          ${(st.parents || []).length
+            ? (st.parents || []).map((p) => `<button class="chip chip--mute" data-open-parent="${p.user_id}">${e(p.name || p.email)}</button>`).join('')
+            : '<span class="tiny dim">ยังไม่มีผู้ปกครอง</span>'}
+        </div>
+      </div>`).join('')}
+  </div>` : `<div class="empty-soft"><b>ไม่พบนักเรียน</b><p class="tiny dim" style="margin:0">ลองเลือกโรงเรียน/หน่วยงานอื่น</p></div>`}`;
 }
 
 /* ── ตั้งค่า ─────────────────────────────────────────── */
@@ -513,6 +540,9 @@ function bindAdmin(ctx, tab) {
 
   root.querySelectorAll('[data-open-parent]').forEach((btn) => {
     btn.addEventListener('click', () => openParentDetail(btn.dataset.openParent, ctx));
+  });
+  root.querySelectorAll('[data-add-student]').forEach((btn) => {
+    btn.addEventListener('click', () => openAddStudent(btn.dataset.addStudent, ctx));
   });
 
   // คอร์ส

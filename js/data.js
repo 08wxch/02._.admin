@@ -468,6 +468,13 @@ export async function deleteParent(userId) {
   return data;
 }
 
+/** รายชื่อครูทั้งหมดจาก 02._.mock (ไม่รวมอีเมล) */
+export async function teachersList() {
+  const { data, error } = await sb().rpc('bk_teachers_list');
+  if (error) throw error;
+  return data || [];
+}
+
 export async function listOrganizations() {
   const { data, error } = await sb().rpc('bk_organizations');
   if (error) throw error;

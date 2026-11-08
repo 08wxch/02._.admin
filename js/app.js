@@ -25,56 +25,115 @@ export const statusBadge = (s) => {
   return `<span class="chip ${cls}">${label}</span>`;
 };
 
-/* ── เลย์เอาต์คอนโซล + แถบบน ───────────────────────────── */
-export function consoleLayout({ items = [], title = '', subtitle = '', body = '' }) {
-  const acc = data.getAccount() || {};
+
+/* การ์ดคอร์สสำหรับหน้าตัวอย่าง (เหมือนที่ผู้ปกครองเห็น) */
+function courseCardForAdmin(c) {
+  const left = c.seats ? `${c.left ?? c.seats} ที่นั่ง` : 'ไม่จำกัด';
+  const low = c.seats && (c.left ?? c.seats) <= 2;
   return `
-  <div class="console__top">
-    <button class="nav-toggle" id="console-nav-toggle" type="button" aria-label="เปิดเมนู" aria-expanded="false">
-      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
-        <path d="M4 7h16M4 12h16M4 17h16"/>
-      </svg>
-    </button>
-    <a class="brand brand--default" href="#/dashboard">
-      <span class="brand-mark brand-mark--sm"><img src="./assets/brand/logo-circle.png" alt=""></span>
-      <span class="brand__words"><span class="brand__name">02._.admin</span>
-        <span class="brand__sub">${acc.role === 'owner' ? 'เจ้าของระบบ' : 'ครู'}</span></span>
-    </a>
-    <div class="console__top-right">
-      <button class="profile-btn" id="profile-btn" title="ข้อมูลของฉัน">
-        <span class="avatar avatar--md" style="width:30px;height:30px">${e((acc.teacher_code || acc.name || '?').trim().charAt(0).toUpperCase())}</span>
-        <span class="profile-btn__text">
-          <b>${e(acc.teacher_code || acc.name || '')}</b>
-          <span class="tiny dim">${acc.name ? e(acc.name) : (acc.role === 'owner' ? 'เจ้าของระบบ' : 'ครู')}</span>
-        </span>
-      </button>
+  <a class="course-card" href="#/course/${c.id || ''}">
+    <div class="course-card__media">
+      ${c.image_url
+        ? `<img src="${e(c.image_url)}" alt="" loading="lazy">`
+        : `<div class="course-card__placeholder">${e((c.subject || 'คอร์ส').slice(0, 12))}</div>`}
     </div>
-  </div>
-  <div class="console">
-    <aside class="console__nav" id="console-nav">
-      <div class="console__nav-head">
-        <span class="console__eyebrow">เมนูจัดการ</span>
-        <button class="nav-close" id="console-nav-close" type="button" aria-label="ปิดเมนู">
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
-            <path d="M6 6l12 12M18 6L6 18"/>
-          </svg>
-        </button>
+    <div class="course-card__body">
+      <div class="tiny dim">${e(c.level || c.subject || '')}</div>
+      <h3>${e(c.title || 'ชื่อคอร์ส')}</h3>
+      <p class="tiny dim" style="margin:0">${e(c.subtitle || '')}</p>
+      <div class="course-card__foot">
+        <span class="price">${baht(c.price || 0)}</span>
+        <span class="seat-badge${low ? ' is-low' : ''}">${e(left)}</span>
       </div>
-      ${items.map((it) => `
-        <a href="${it.href}" class="${it.active ? 'is-active' : ''}"${it.active ? ' aria-current="page"' : ''}>
-          <span>${e(it.label)}</span>
-          ${it.count ? `<span class="count">${e(String(it.count))}</span>` : ''}
-        </a>`).join('')}
-    </aside>
-    <section class="console__main">
-      ${title ? `<h1 class="console__title">${e(title)}</h1>` : ''}
-      ${subtitle ? `<p class="console__sub">${subtitle}</p>` : ''}
-      ${body}
-    </section>
-  </div>
-  <div class="nav-scrim" id="console-scrim" hidden></div>`;
+    </div>
+  </a>`;
 }
 
+/* ── เลย์เอาต์คอนโซล: แถบดำซ้าย + แถบบนขาว (แบบ 02._.mock) ── */
+const NAV_ICONS = {
+  orders: '<path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/>',
+  courses: '<path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/>',
+  coupons: '<path d="M20 12a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2"/><path d="M4 12a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2"/><path d="M12 2v20"/>',
+  teachers: '<path d="M22 10v6M2 10l10-5 10 5-10 5z"/><path d="M6 12v5c3 3 9 3 12 0v-5"/>',
+  parents: '<path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/>',
+  students: '<circle cx="12" cy="8" r="4"/><path d="M4 21v-1a6 6 0 0 1 6-6h4a6 6 0 0 1 6 6v1"/>',
+  settings: '<circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.6 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.6h.09A1.65 1.65 0 0 0 10 3.09V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/>',
+};
+
+const navIcon = (key, size = 18) => `<svg class="icon" width="${size}" height="${size}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${NAV_ICONS[key] || NAV_ICONS.courses}</svg>`;
+
+export function consoleLayout({ items = [], title = '', subtitle = '', body = '', breadcrumb = '' }) {
+  const acc = data.getAccount() || {};
+  const identity = acc.name || acc.teacher_code || '';
+  const roleLabel = acc.role === 'owner' ? 'เจ้าของระบบ' : 'ครู';
+  const orgLabel = acc.org_hint || '';
+
+  const renderGroup = (list) => list.map((it) => `
+    <a href="${it.href}" class="${it.active ? 'is-active' : ''}"${it.active ? ' aria-current="page"' : ''}>
+      ${navIcon(it.icon)}<span>${e(it.label)}</span>
+      ${it.count ? `<span class="side-nav__badge">${e(String(it.count))}</span>` : ''}
+    </a>`).join('');
+
+  const main = items.filter((i) => !i.group);
+  const people = items.filter((i) => i.group === 'people');
+  const config = items.filter((i) => i.group === 'config');
+
+  return `
+  <div class="teacher-app">
+    <aside class="teacher-sidebar" id="console-nav">
+      <div class="sidebar__brand">
+        <a class="brand brand--light" href="#/dashboard" style="text-decoration:none">
+          <span class="brand-mark brand-mark--sm"><img src="./assets/brand/logo-circle.png" alt=""></span>
+          <span class="brand__words"><span class="brand__name">02._.admin</span>
+            <span class="brand__sub">หลังบ้านเจ้าของระบบ</span></span>
+        </a>
+        <button class="nav-close nav-close--dark" id="console-nav-close" type="button" aria-label="ปิดเมนู">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg>
+        </button>
+      </div>
+
+      <div class="sidebar__label">พื้นที่ทำงาน</div>
+      <nav class="side-nav" aria-label="เมนูจัดการ">${renderGroup(main)}</nav>
+
+      ${people.length ? `<div class="sidebar__divider"></div>
+        <div class="sidebar__label">บุคลากรและนักเรียน</div>
+        <nav class="side-nav">${renderGroup(people)}</nav>` : ''}
+
+      ${config.length ? `<div class="sidebar__divider"></div>
+        <div class="sidebar__label">ระบบ</div>
+        <nav class="side-nav">${renderGroup(config)}</nav>` : ''}
+
+      <div class="sidebar-profile">
+        <span class="avatar avatar--md" style="width:32px;height:32px">${e((identity.trim().charAt(0) || '?').toUpperCase())}</span>
+        <button class="sidebar-profile__copy" type="button" id="profile-btn" title="ข้อมูลของฉัน">
+          <strong>${e(identity)}</strong>
+          <span>${e(acc.teacher_code || roleLabel)}${orgLabel ? ` · ${e(orgLabel)}` : ''}</span>
+        </button>
+        <div class="sidebar-profile__actions">
+          <button class="icon-btn" type="button" data-signout title="ออกจากระบบ" aria-label="ออกจากระบบ">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><path d="M16 17l5-5-5-5"/><path d="M21 12H9"/></svg>
+          </button>
+        </div>
+      </div>
+    </aside>
+
+    <div class="teacher-main">
+      <header class="teacher-topbar">
+        <button class="icon-btn teacher-topbar__menu" type="button" id="console-nav-toggle" aria-label="เปิดเมนู">
+          <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 7h16M4 12h16M4 17h16"/></svg>
+        </button>
+        <div class="breadcrumb">${breadcrumb || 'หลังบ้าน'}</div>
+      </header>
+
+      <main class="teacher-content">
+        ${title ? `<h1 class="console__title">${e(title)}</h1>` : ''}
+        ${subtitle ? `<p class="console__sub">${subtitle}</p>` : ''}
+        ${body}
+      </main>
+    </div>
+  </div>
+  <div class="sidebar-backdrop" id="console-scrim"></div>`;
+}
 /* ── โปรไฟล์ของฉัน (แก้ข้อมูล/รหัสผ่าน) ────────────────── */
 export function openProfile() {
   const acc = data.getAccount() || {};
@@ -151,7 +210,7 @@ function parse() {
 }
 
 const ctx = {
-  data, me: null, settings, money, baht, statusBadge, consoleLayout,
+  data, me: null, settings, money, baht, statusBadge, consoleLayout, courseCardForAdmin,
   go: (p) => { location.hash = `#${p}`; },
 };
 
@@ -190,16 +249,12 @@ function bindConsoleNav() {
   const toggle = document.getElementById('console-nav-toggle');
   const nav = document.getElementById('console-nav');
   const scrim = document.getElementById('console-scrim');
+  const backdrop = document.getElementById('console-scrim');
   if (!toggle || !nav) return;
 
   const setOpen = (open) => {
-    nav.classList.toggle('is-open', open);
-    if (scrim) {
-      scrim.hidden = !open;
-      requestAnimationFrame(() => scrim.classList.toggle('is-open', open));
-    }
+    document.body.classList.toggle('sidebar-open', open);
     toggle.setAttribute('aria-expanded', open ? 'true' : 'false');
-    document.body.classList.toggle('nav-open', open);
   };
 
   if (toggle.dataset.bound) return;
