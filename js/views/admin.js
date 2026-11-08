@@ -40,7 +40,7 @@ export async function renderAdmin(_arg, ctx) {
       : tab === 'coupons'
         ? couponsHtml(coupons, courses, editId, ctx)
         : tab === 'users'
-        ? usersHtml(parents, teachers, ctx, orgs)
+        ? usersHtml(scopeParents(parents, links, ctx), teachers, ctx, orgs)
         : tab === 'links'
           ? linksHtml(parents, links, roster, ctx)
           : settingsHtml(ctx);
@@ -294,6 +294,15 @@ function couponsHtml(coupons, courses, editId, ctx) {
       </div>
     </div>` : ''}
   </div>`;
+}
+
+
+/** ครูเห็นเฉพาะผู้ปกครองที่มีนักเรียนในหน่วยงานตัวเอง */
+function scopeParents(parents, links, ctx) {
+  if (ctx.me?.role !== 'teacher') return parents;
+  const myOrg = ctx.me.org_id || '';
+  const ok = new Set(links.filter((l) => l.org_id === myOrg).map((l) => l.user_id));
+  return parents.filter((p) => ok.has(p.user_id) || (p.org_ids || []).includes(myOrg));
 }
 
 /* ── ผู้ใช้งาน ───────────────────────────────────────── */
