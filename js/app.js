@@ -115,8 +115,8 @@ export function consoleLayout({ items = [], title = '', subtitle = '', body = ''
         </button>
       </div>
 
-      <div class="sidebar__label">พื้นที่ทำงาน</div>
-      <nav class="side-nav" aria-label="เมนูจัดการ">${renderGroup(main)}</nav>
+      ${main.length ? `<div class="sidebar__label">พื้นที่ทำงาน</div>
+      <nav class="side-nav" aria-label="เมนูจัดการ">${renderGroup(main)}</nav>` : ''}
 
       ${people.length ? `<div class="sidebar__divider"></div>
         <div class="sidebar__label">บุคลากรและนักเรียน</div>

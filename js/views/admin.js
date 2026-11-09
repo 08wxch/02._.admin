@@ -102,6 +102,15 @@ export function buildMenu(activeTab, isOwner) {
     .map((it) => ({ ...it, href: `#/dashboard?tab=${it.id}`, active: activeTab === it.id }));
 }
 
+/** ครูเห็นเฉพาะผู้ปกครองในหน่วยงานของตัวเอง */
+function scopeParents(parents, links, ctx) {
+  if (ctx.me?.role !== 'teacher') return parents;
+  const myOrg = ctx.me.org_id || '';
+  if (!myOrg) return [];
+  const ok = new Set((links || []).filter((l) => l.org_id === myOrg).map((l) => l.user_id));
+  return parents.filter((p) => ok.has(p.user_id) || (p.org_ids || []).includes(myOrg));
+}
+
 /* ── รอยืนยัน ─────────────────────────────────────────── */
 function ordersHtml(orders, ctx) {
   const pending = orders.filter((o) => o.status === 'pending_confirm');
@@ -436,7 +445,10 @@ function teachersHtml(teachers, ctx, orgs) {
           <span class="tiny dim">กดที่ชื่อเพื่อดูข้อมูลติดต่อ</span>
         </div>
       </div>`).join('')}
-  </div>` : `<div class="empty-soft"><b>ไม่พบครู</b><p class="tiny dim" style="margin:0">ลองเลือกโรงเรียน/หน่วยงานอื่น</p></div>`}`;
+  </div>` : `<div class="book-card" style="padding:22px;text-align:center">
+    <b>ยังไม่มีครู</b>
+    <p class="tiny dim" style="margin:6px 0 0">${orgFilter ? 'ยังไม่มีครูในโรงเรียน/หน่วยงานนี้' : 'ยังไม่มีครูในระบบ'}</p>
+  </div>`}`;
 }
 
 
@@ -518,7 +530,10 @@ function parentsHtml(parents, links, ctx, orgs) {
           <button class="add-plus" data-add-student="${p.user_id}" title="เพิ่มบัญชีนักเรียน" aria-label="เพิ่มบัญชีนักเรียน">+</button>
         </div>
       </div>`).join('')}
-  </div>` : `<div class="empty-soft"><b>ไม่พบผู้ปกครอง</b><p class="tiny dim" style="margin:0">ลองเลือกโรงเรียน/หน่วยงานอื่น</p></div>`}`;
+  </div>` : `<div class="book-card" style="padding:22px;text-align:center">
+    <b>ยังไม่มีผู้ปกครอง</b>
+    <p class="tiny dim" style="margin:6px 0 0">${orgFilter ? 'ยังไม่มีผู้ปกครองในโรงเรียน/หน่วยงานนี้' : 'ยังไม่มีผู้ปกครองในระบบ'}</p>
+  </div>`}`;
 }
 
 /* ── นักเรียน ────────────────────────────────────────── */
@@ -576,7 +591,10 @@ function studentsHtml(students, ctx, orgs, classMap = {}) {
           <button class="add-plus" data-add-parent-to="${st.id}" title="เพิ่มผู้ปกครอง" aria-label="เพิ่มผู้ปกครอง">+</button>
         </div>
       </div>`).join('')}
-  </div>` : `<div class="empty-soft"><b>ไม่พบนักเรียน</b><p class="tiny dim" style="margin:0">ลองเลือกโรงเรียน/หน่วยงานอื่น</p></div>`}`;
+  </div>` : `<div class="book-card" style="padding:22px;text-align:center">
+    <b>ยังไม่มีนักเรียน</b>
+    <p class="tiny dim" style="margin:6px 0 0">${orgFilter ? 'ยังไม่มีนักเรียนในโรงเรียน/หน่วยงานนี้' : 'ยังไม่มีนักเรียนในระบบ'}</p>
+  </div>`}`;
 }
 
 /* ── ตั้งค่า ─────────────────────────────────────────── */
