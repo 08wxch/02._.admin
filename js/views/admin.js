@@ -50,9 +50,9 @@ export async function renderAdmin(_arg, ctx) {
         : tab === 'teachers'
           ? teachersHtml(teachersMock, ctx, orgs, studentsOverviewData, scope)
           : tab === 'parents' || tab === 'users' || tab === 'links'
-            ? parentsHtml(scopeParents(parents, links, ctx), links, ctx, orgs)
+            ? parentsHtml(scopeParents(parents, links, ctx), links, ctx, orgs, scope)
             : tab === 'students'
-              ? studentsHtml(studentsOverviewData, ctx, orgs, classMap)
+              ? studentsHtml(studentsOverviewData, ctx, orgs, classMap, scope)
               : settingsHtml(ctx);
 
   const isOwnerRole = ctx.me?.role === 'owner';
@@ -418,14 +418,13 @@ function couponsHtml(coupons, courses, editId, ctx) {
 /* ── ครูและบุคลากร (แบบเดียวกับ 02._.mock) ───────────── */
 function teachersHtml(teachers, ctx, orgs, students = [], scope = {}) {
   const canChoose = Boolean(scope?.canChooseOrg);
-  const allowedOrgs = canChoose
-    ? orgs
-    : orgs.filter((o) => (scope?.orgIds || []).includes(o.id) || o.id === scope?.myOrgId);
+  const visibleIds = scope?.orgIds || [];
+  const allowedOrgs = orgs.filter((o) => visibleIds.includes(o.id));
 
   const requested = ctx.route?.query.get('torg') || '';
   const orgFilter = canChoose ? (requested && allowedOrgs.some((o) => o.id === requested) ? requested : '') : (scope?.myOrgId || '');
   const orgName = (id) => orgs.find((o) => o.id === id)?.name || '';
-  const scoped = canChoose ? teachers : teachers.filter((t) => (scope?.orgIds || []).includes(t.orgId) || t.isOwner === false && t.orgId === scope?.myOrgId);
+  const scoped = teachers.filter((t) => visibleIds.includes(t.orgId));
   const shown = orgFilter ? scoped.filter((t) => t.orgId === orgFilter) : scoped;
 
   const cards = shown.map((t) => {
@@ -460,8 +459,8 @@ function teachersHtml(teachers, ctx, orgs, students = [], scope = {}) {
   return `
   <div class="staff-summary">
     <div class="overview-metric"><span>ครูและบุคลากร</span><strong>${teachers.length} <small>คน</small></strong></div>
-    <div class="overview-metric"><span>หน่วยงานที่เห็น</span><strong>${orgFilter ? 1 : orgs.length} <small>แห่ง</small></strong></div>
-    <div class="overview-metric"><span>นักเรียนในขอบเขต</span><strong>${students.length} <small>คน</small></strong></div>
+    <div class="overview-metric"><span>หน่วยงานที่เห็น</span><strong>${orgFilter ? 1 : allowedOrgs.length} <small>แห่ง</small></strong></div>
+    <div class="overview-metric"><span>นักเรียนในขอบเขต</span><strong>${students.filter((s) => visibleIds.includes(s.orgId)).length} <small>คน</small></strong></div>
     <div class="overview-metric"><span>แสดงอยู่</span><strong>${shown.length} <small>คน</small></strong></div>
   </div>
 
@@ -523,7 +522,10 @@ async function openTeacherDetail(code, ctx) {
 }
 
 /* ── ผู้ปกครอง ───────────────────────────────────────── */
-function parentsHtml(parents, links, ctx, orgs) {
+function parentsHtml(parents, links, ctx, orgs, scope = {}) {
+  const visibleIds = scope?.orgIds || [];
+  const canChooseP = Boolean(scope?.canChooseOrg);
+  orgs = orgs.filter((o) => !visibleIds.length || visibleIds.includes(o.id));
   const orgFilter = ctx.route?.query.get('porg') || '';
   const orgName = (id) => orgs.find((o) => o.id === id)?.name || id || '';
   const byParent = {};
@@ -570,7 +572,11 @@ function parentsHtml(parents, links, ctx, orgs) {
 }
 
 /* ── นักเรียน ────────────────────────────────────────── */
-function studentsHtml(students, ctx, orgs, classMap = {}) {
+function studentsHtml(students, ctx, orgs, classMap = {}, scope = {}) {
+  const visibleIds = scope?.orgIds || [];
+  const canChoose = Boolean(scope?.canChooseOrg);
+  students = students.filter((s) => !visibleIds.length || visibleIds.includes(s.orgId));
+  orgs = orgs.filter((o) => !visibleIds.length || visibleIds.includes(o.id));
   const orgFilter = ctx.route?.query.get('sorg') || '';
   const classFilter = ctx.route?.query.get('sclass') || '';
   const orgName = (id) => orgs.find((o) => o.id === id)?.name || id || '';
