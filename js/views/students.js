@@ -2,8 +2,9 @@
 
 import { closeModal, confirmDialog, openModal, toast } from '../ui.js';
 import { e, thaiDate } from '../utils.js';
-import { studentOverviewHtml } from './account.js';
+
 import { hydrateMath } from '../latex.js';
+import { studentOverviewHtml } from './account.js';
 
 export async function renderStudents(studentId, ctx) {
   if (!ctx.me || (ctx.me.role !== 'owner' && ctx.me.role !== 'teacher')) {
@@ -183,15 +184,16 @@ export async function openAddStudent(parentId, ctx) {
   });
 }
 
-/* ── รายละเอียดนักเรียน 1 คน (ข้อมูล + ผู้ปกครอง) ─────── */
+/* ── รายละเอียดนักเรียน: คะแนน + กราฟ + ผู้ปกครอง ──────── */
 async function studentDetail(studentId, ctx) {
-  const [students, parents] = await Promise.all([
+  const [report, students, parents] = await Promise.all([
+    ctx.data.studentReport(studentId).catch(() => null),
     ctx.data.studentsOverview().catch(() => []),
     ctx.data.listParents().catch(() => []),
   ]);
 
-  const row = students.find((s) => s.id === studentId);
-  if (!row) {
+  const row = students.find((s) => s.id === studentId) || {};
+  if (!report && !row.id) {
     return ctx.consoleLayout({
       items: ctx.menuItems('students'),
       title: 'ไม่พบนักเรียนคนนี้',
@@ -225,21 +227,15 @@ async function studentDetail(studentId, ctx) {
 
   return ctx.consoleLayout({
     items: ctx.menuItems('students'),
-    title: row.name || '',
-    subtitle: `${e(row.code || '')}${row.class ? ` · ${e(row.class)}` : ''}${row.orgName ? ` · ${e(row.orgName)}` : ''}`,
+    title: report?.student?.name || row.name || '',
+    subtitle: '',
     body: `
       <div class="detail-2col">
-        <div class="book-card">
-          <div style="font-family:var(--brand-font);font-size:16px;margin-bottom:10px">ข้อมูลนักเรียน</div>
-          <div class="kv"><span>รหัสนักเรียน</span><b>${e(row.code || '—')}</b></div>
-          <div class="kv"><span>ชื่อ–นามสกุล</span><b>${e(row.name || '—')}</b></div>
-          <div class="kv"><span>class</span><b>${e(row.class || '—')}</b></div>
-          <div class="kv"><span>โรงเรียน / หน่วยงาน</span><b>${e(row.orgName || '—')}</b></div>
-          <div class="hint" style="margin-top:12px">
-            ดูคะแนนและเฉลยรายข้อได้ที่ระบบ <b>02._.mock</b>
-          </div>
+        <div>
+          ${report
+            ? studentOverviewHtml(report, ctx, { studentId, hideExamLinks: true })
+            : '<div class="empty-soft"><b>ยังไม่มีผลการสอบของนักเรียนคนนี้</b></div>'}
         </div>
-
         <aside class="book-card" style="height:fit-content">
           <div style="font-family:var(--brand-font);font-size:16px;margin-bottom:4px">บัญชีผู้ปกครองที่ผูกไว้</div>
           <p class="tiny dim" style="margin:0 0 12px">นักเรียน 1 คนผูกได้มากกว่า 1 บัญชี</p>

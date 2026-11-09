@@ -178,7 +178,7 @@ export function studentOverviewHtml(report, ctx, opts = {}) {
         ${x.showScore
           ? `<div class="exam-score">${x.score}/${x.max}<small>${x.percent}%</small></div>`
           : `<div class="tiny dim">ครูยังไม่ประกาศคะแนน</div>`}
-        <a class="btn btn-ghost btn-sm" href="#/scores/${encodeURIComponent(studentId)}/exam/${encodeURIComponent(x.examId)}">ดูข้อที่ผิด →</a>
+        ${opts.hideExamLinks ? '' : `<a class="btn btn-ghost btn-sm" href="#/scores/${encodeURIComponent(studentId)}/exam/${encodeURIComponent(x.examId)}">ดูข้อที่ผิด →</a>`}
       </div>
     </div>`).join('');
 
@@ -219,7 +219,7 @@ export function studentOverviewHtml(report, ctx, opts = {}) {
     <div class="book-card">
       <div style="display:flex;justify-content:space-between;align-items:baseline;gap:12px;flex-wrap:wrap">
         <div style="font-family:var(--brand-font);font-size:16px">ชุดข้อสอบที่เคยทำ (${exams.length})</div>
-        <div class="tiny dim">กด "ดูข้อที่ผิด" เพื่อเปิดดูทีละข้อ</div>
+        ${opts.hideExamLinks ? '' : '<div class="tiny dim">กด "ดูข้อที่ผิด" เพื่อเปิดดูทีละข้อ</div>'}
       </div>
       ${exams.length ? `<div class="exam-list" style="margin-top:8px">${rows}</div>` : `<p class="tiny dim">ยังไม่มีประวัติการทำข้อสอบ</p>`}
     </div>
