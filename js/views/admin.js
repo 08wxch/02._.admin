@@ -425,8 +425,10 @@ function teachersHtml(teachers, ctx, orgs, students = [], scope = {}, orgsFull =
   const requested = ctx.route?.query.get('torg') || '';
   const orgFilter = canChoose ? (requested && allowedOrgs.some((o) => o.id === requested) ? requested : '') : (scope?.myOrgId || '');
   const orgName = (id) => orgs.find((o) => o.id === id)?.name || '';
-  const scoped = teachers.filter((t) => visibleIds.includes(t.orgId));
-  const shown = orgFilter ? scoped.filter((t) => t.orgId === orgFilter) : scoped;
+  const scoped = teachers
+    .filter((t) => t.isOwner || visibleIds.includes(t.orgId))
+    .sort((a, b) => (b.isOwner ? 1 : 0) - (a.isOwner ? 1 : 0));
+  const shown = (orgFilter && canChoose) ? scoped.filter((t) => t.orgId === orgFilter || t.isOwner) : scoped;
 
   const cards = shown.map((t) => {
     const roleLabel = t.isOwner ? 'ผู้ดูแลระบบ' : (t.roleLabel || (t.staffRole === 'manager' ? 'ผู้จัดการ' : 'ครูผู้สอน'));
@@ -451,7 +453,7 @@ function teachersHtml(teachers, ctx, orgs, students = [], scope = {}, orgsFull =
         <div><span>วิชา</span><strong>${e(t.subject || '—')}</strong></div>
       </div>
       <div class="staff-card__foot">
-        <span>${t.phone ? `โทร ${e(t.phone)}` : 'ยังไม่มีข้อมูลติดต่อ'}</span>
+        <span>${t.phone || t.accountPhone ? `โทร ${e(t.phone || t.accountPhone)}` : (t.accountLine ? `LINE ${e(t.accountLine)}` : 'ยังไม่มีข้อมูลติดต่อ')}</span>
         <button class="btn btn-ghost btn-sm" type="button" data-open-teacher="${e(t.code)}">ดูข้อมูล</button>
       </div>
     </article>`;
