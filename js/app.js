@@ -31,7 +31,7 @@ function courseCardForAdmin(c) {
   const left = c.seats ? `${c.left ?? c.seats} ที่นั่ง` : 'ไม่จำกัด';
   const low = c.seats && (c.left ?? c.seats) <= 2;
   return `
-  <a class="course-card" href="#/course/${c.id || ''}">
+  <div class="course-card">
     <div class="course-card__media">
       ${c.image_url
         ? `<img src="${e(c.image_url)}" alt="" loading="lazy">`
@@ -46,7 +46,7 @@ function courseCardForAdmin(c) {
         <span class="seat-badge${low ? ' is-low' : ''}">${e(left)}</span>
       </div>
     </div>
-  </a>`;
+  </div>`;
 }
 
 
