@@ -4020,3 +4020,13 @@ button.chip:hover { background: var(--mint-strong); }
 .course-tile__thumb img { width: 100%; height: 100%; object-fit: cover; }
 .course-tile__thumb span { font-family: var(--brand-font); color: var(--mint-strong); font-size: 15px; }
 .course-tile__body { padding: 12px 14px 16px; }
+
+/* ══ ฟอร์มคูปอง: ช่องตัวเลข + หน่วยต่อท้าย ═════════════ */
+.unit-row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.unit-row .check-line { white-space: nowrap; }
+.unit-suffix {
+  min-width: 54px; padding: 0 10px; height: 40px; display: inline-grid; place-items: center;
+  border: 1px solid var(--book-line); border-radius: 10px; background: var(--mint-soft);
+  font-size: 13px; color: var(--ink);
+}
+.unit-row input[type="number"] { max-width: 160px; }

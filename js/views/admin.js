@@ -281,6 +281,130 @@ function coursesHtml(courses, editId, ctx, categories = []) {
   return `<div class="course-editor">${preview}${form}</div>`;
 }
 
+/* ── บัตรส่วนลด ───────────────────────────────────────── */
+function couponsHtml(coupons, courses, editId, ctx) {
+  const isOwner = ctx.me?.role === 'owner';
+  const editing = coupons.find((c) => c.id === editId);
+  const open = Boolean(editing) || ctx.route?.query.get('new') === '1';
+  const courseName = (id) => courses.find((c) => c.id === id)?.title || '—';
+  const scopeText = (c) => ((c.course_ids || []).length ? c.course_ids.map(courseName).join(' · ') : 'ทุกคอร์ส');
+  const valueText = (c) => (c.kind === 'percent' ? `ลด ${c.value}%` : `ลด ${ctx.baht(c.value)}`);
+
+  const list = `
+    <div style="display:flex;justify-content:space-between;align-items:center;gap:12px;margin-bottom:14px;flex-wrap:wrap">
+      <div class="tiny dim">ทั้งหมด ${coupons.length} โค้ด</div>
+      ${isOwner ? '<a class="btn btn-primary btn-sm" href="#/dashboard?tab=coupons&new=1">+ เพิ่มคูปอง</a>' : ''}
+    </div>
+    <div class="book-card">
+      ${coupons.length ? `<div class="table-wrap"><table class="book-table coupon-table">
+        <thead><tr><th>โค้ด</th><th>ส่วนลด</th><th>ใช้กับ</th><th>ใช้แล้ว</th><th>สถานะ</th><th></th></tr></thead>
+        <tbody>${coupons.map((c) => `<tr>
+          <td>
+            ${c.image_url ? `<img src="${e(c.image_url)}" alt="" class="coupon-thumb">` : ''}
+            <b>${e(c.title || c.code)}</b>
+            <div class="tiny dim">${e(c.code)}${c.note ? ` · ${e(c.note)}` : ''}</div>
+          </td>
+          <td>${e(valueText(c))}</td>
+          <td class="tiny">${e(scopeText(c))}</td>
+          <td class="num">${c.used || 0}${c.max_uses ? ` / ${c.max_uses}` : ''}</td>
+          <td>${c.active ? '<span class="chip chip--ok">เปิด</span>' : '<span class="chip chip--mute">ปิด</span>'}</td>
+          <td style="white-space:nowrap">
+            <a class="btn btn-ghost btn-sm" href="#/dashboard?tab=coupons&edit=${c.id}">แก้ไข</a>
+            <button class="btn btn-ghost btn-sm" data-del-coupon="${c.id}" style="color:var(--red)">ลบ</button>
+          </td>
+        </tr>`).join('')}</tbody>
+      </table></div>` : `<p class="tiny dim">ยังไม่มีคูปอง — กด "+ เพิ่มคูปอง" เพื่อสร้างใบแรก</p>`}
+    </div>`;
+
+  if (!open) return list;
+
+  const kind = editing?.kind === 'amount' ? 'amount' : 'percent';
+  const limited = editing ? Number(editing.max_uses) > 0 : true;
+  const maxUses = editing && Number(editing.max_uses) > 0 ? Number(editing.max_uses) : 1;
+
+  const form = `
+    <div class="book-card course-editor__form">
+      <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;margin-bottom:10px">
+        <div style="font-family:var(--brand-font);font-size:16px">${editing ? 'แก้ไขคูปอง' : 'เพิ่มคูปอง'}</div>
+        <a class="btn btn-ghost btn-sm" href="#/dashboard?tab=coupons">ปิด</a>
+      </div>
+      <input type="hidden" id="cp-id" value="${editing ? editing.id : ''}">
+
+      <div class="field-row"><label>ชื่อคูปอง (แสดงให้ผู้ปกครองเห็น)</label>
+        <input id="cp-title" value="${e(editing?.title || '')}" placeholder="เช่น บัตรส่วนลดเปิดเทอม" maxlength="80"></div>
+
+      <div class="field-row"><label>โค้ด (ตัวอักษร/ตัวเลข)</label>
+        <div style="display:flex;gap:8px">
+          <input id="cp-code" value="${e(editing?.code || '')}" placeholder="MATH100" style="text-transform:uppercase">
+          <button class="btn btn-ghost btn-sm" id="cp-rand" type="button">สุ่มโค้ด</button>
+        </div>
+      </div>
+
+      <div class="field-row">
+        <label>ส่วนลด</label>
+        <div class="unit-row">
+          <label class="check-line" style="margin:0">
+            <input type="checkbox" id="cp-is-percent" ${kind === 'percent' ? 'checked' : ''}>
+            <span>เปอร์เซ็นต์</span>
+          </label>
+          <input id="cp-value" type="number" min="0" value="${Number(editing?.value || 0)}" style="flex:1">
+          <span class="unit-suffix" id="cp-unit">${kind === 'percent' ? '%' : 'บาท'}</span>
+        </div>
+      </div>
+
+      <div class="field-row"><label>ยอดขั้นต่ำ (บาท)</label>
+        <input id="cp-min" type="number" min="0" value="${Number(editing?.min_amount || 0)}"></div>
+
+      <div class="field-row">
+        <label>จำนวนครั้งที่ใช้ได้</label>
+        <label class="check-line" style="margin:0">
+          <input type="checkbox" id="cp-limited" ${limited ? 'checked' : ''}>
+          <span>จำกัดจำนวนครั้ง</span>
+        </label>
+        <input id="cp-max" type="number" min="1" value="${maxUses}" ${limited ? '' : 'disabled'}>
+      </div>
+
+      <div class="field-row">
+        <label>ใช้กับคอร์ส (ไม่เลือกเลย = ใช้ได้ทุกคอร์ส)</label>
+        <select id="cp-courses" multiple size="${Math.min(6, Math.max(3, courses.length))}" style="height:auto">
+          ${courses.map((c) => `<option value="${c.id}" ${(editing?.course_ids || []).includes(c.id) ? 'selected' : ''}>${e(c.title)}</option>`).join('')}
+        </select>
+        <div style="display:flex;gap:8px;margin-top:6px">
+          <button class="btn btn-ghost btn-sm" type="button" id="cp-clear-courses">ล้างการเลือก (ใช้ทุกคอร์ส)</button>
+          <span class="hint" style="align-self:center">กด Ctrl/⌘ ค้างเพื่อเลือกหลายคอร์ส</span>
+        </div>
+      </div>
+
+      <div class="field-row"><label>รูปบัตร (แนวนอน แนะนำ 1000×560 px · ไม่เกิน 1MB)</label>
+        <input type="file" id="cp-image" accept="image/*">
+        <div id="cp-img-preview" style="margin-top:8px">
+          ${editing?.image_url ? `<img src="${e(editing.image_url)}" alt="" class="coupon-img-preview">` : ''}
+        </div>
+        ${editing?.image_url ? '<button class="btn btn-ghost btn-sm" type="button" id="cp-img-remove" style="margin-top:6px">ลบรูปบัตร</button>' : ''}
+      </div>
+
+      <div class="field-row"><label>หมายเหตุ</label>
+        <input id="cp-note" value="${e(editing?.note || '')}" placeholder="เช่น โปรเปิดเทอม"></div>
+
+      <div class="field-row"><label>วันหมดอายุ (ไม่บังคับ)</label>
+        <input id="cp-exp" type="date" value="${editing?.expires_at ? String(editing.expires_at).slice(0, 10) : ''}"></div>
+
+      <div style="display:flex;gap:8px;margin-top:10px">
+        <button class="btn btn-primary" id="cp-save">${editing ? 'บันทึกการแก้ไข' : 'สร้างคูปอง'}</button>
+        <a class="btn btn-ghost" href="#/dashboard?tab=coupons">ยกเลิก</a>
+      </div>
+    </div>`;
+
+  const preview = `
+    <div class="course-editor__preview">
+      <div class="tiny dim" style="margin-bottom:8px">ตัวอย่างที่ผู้ปกครองเห็น</div>
+      ${ctx.couponCardForAdmin(editing || { kind: 'percent', value: 10, title: '', code: 'CODE', course_ids: [] }, courses)}
+      <div style="margin-top:12px"><a class="btn btn-ghost btn-sm" href="#/dashboard?tab=coupons">← กลับรายการคูปอง</a></div>
+    </div>`;
+
+  return `<div class="course-editor">${preview}${form}</div>`;
+}
+
 /* ── ครู (จาก 02._.mock) ─────────────────────────────── */
 function teachersHtml(teachers, ctx, orgs) {
   const orgFilter = ctx.route?.query.get('torg') || '';
@@ -620,6 +744,36 @@ function bindListControls(root, ctx) {
     });
   });
 
+  ctx._courses = (ctx._courses || []);
+  bindCouponForm(root, ctx);
+
+  root.querySelector('#cp-rand')?.addEventListener('click', () => {
+    const input = root.querySelector('#cp-code');
+    if (!input) return;
+    const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+    input.value = Array.from({ length: 7 }, () => chars[Math.floor(Math.random() * chars.length)]).join('');
+    input.dispatchEvent(new Event('input', { bubbles: true }));
+  });
+  root.querySelector('#cp-clear-courses')?.addEventListener('click', () => {
+    root.querySelectorAll('#cp-courses option').forEach((o) => { o.selected = false; });
+    root.querySelector('#cp-courses')?.dispatchEvent(new Event('change', { bubbles: true }));
+  });
+  root.querySelector('#cp-image')?.addEventListener('change', async (ev) => {
+    const file = ev.currentTarget.files?.[0];
+    if (!file) return;
+    try {
+      const url = await ctx.data.uploadCouponImage(file);
+      const box = root.querySelector('#cp-img-preview');
+      if (box) box.innerHTML = `<img src="${url}" alt="" class="coupon-img-preview">`;
+      toast('อัปโหลดรูปบัตรแล้ว', 'success');
+    } catch (err) { toast(err.message || 'อัปโหลดไม่สำเร็จ', 'error'); }
+  });
+  root.querySelector('#cp-img-remove')?.addEventListener('click', () => {
+    const box = root.querySelector('#cp-img-preview');
+    if (box) box.innerHTML = '';
+    toast('ลบรูปบัตรแล้ว', 'success');
+  });
+
   root.querySelectorAll('[data-add-parent-to]').forEach((btn) => {
     if (btn.dataset.bound) return;
     btn.dataset.bound = '1';
@@ -652,6 +806,81 @@ function openCategoryDialog(ctx, { id = '', name = '' } = {}) {
       input?.addEventListener('keydown', (ev) => { if (ev.key === 'Enter') save(); });
       root.querySelector('[data-cancel-cat]')?.addEventListener('click', closeModal);
     },
+  });
+}
+
+
+/** ผูกพฤติกรรมฟอร์มคูปอง: หน่วย %, จำกัด/ไม่จำกัดครั้ง, พรีวิวสด */
+function bindCouponForm(root, ctx) {
+  const form = root.querySelector('#cp-save')?.closest('.book-card');
+  if (!form || form.dataset.bound) return;
+  form.dataset.bound = '1';
+
+  const isPercent = form.querySelector('#cp-is-percent');
+  const unit = form.querySelector('#cp-unit');
+  const value = form.querySelector('#cp-value');
+  const limited = form.querySelector('#cp-limited');
+  const max = form.querySelector('#cp-max');
+  const coursesSel = form.querySelector('#cp-courses');
+  const title = form.querySelector('#cp-title');
+  const code = form.querySelector('#cp-code');
+  const previewBox = root.querySelector('.course-editor__preview');
+
+  const syncUnit = () => { if (unit) unit.textContent = isPercent?.checked ? '%' : 'บาท'; };
+  const syncLimited = () => {
+    if (!max || !limited) return;
+    max.disabled = !limited.checked;
+    if (!limited.checked) max.value = '';
+    else if (!max.value) max.value = '1';
+  };
+  const syncPreview = () => {
+    if (!previewBox || !ctx.couponCardForAdmin) return;
+    const courseIds = [...(coursesSel?.selectedOptions || [])].map((o) => o.value);
+    const draft = {
+      kind: isPercent?.checked ? 'percent' : 'amount',
+      value: Number(value?.value || 0),
+      title: title?.value || '',
+      code: (code?.value || '').toUpperCase() || 'CODE',
+      course_ids: courseIds,
+      min_amount: 0,
+    };
+    const old = previewBox.querySelector('.coupon-card');
+    const html = ctx.couponCardForAdmin(draft, ctx._courses || []);
+    if (old) { const tmp = document.createElement('div'); tmp.innerHTML = html; old.replaceWith(tmp.firstElementChild); }
+  };
+
+  isPercent?.addEventListener('change', () => { syncUnit(); syncPreview(); });
+  limited?.addEventListener('change', () => { syncLimited(); });
+  value?.addEventListener('input', syncPreview);
+  title?.addEventListener('input', syncPreview);
+  code?.addEventListener('input', syncPreview);
+  coursesSel?.addEventListener('change', syncPreview);
+  syncUnit(); syncLimited();
+
+  // บันทึก
+  form.querySelector('#cp-save')?.addEventListener('click', async () => {
+    const courseIds = [...(coursesSel?.selectedOptions || [])].map((o) => o.value);
+    const payload = {
+      id: form.querySelector('#cp-id')?.value || undefined,
+      title: title?.value.trim() || '',
+      code: (code?.value || '').trim().toUpperCase(),
+      kind: isPercent?.checked ? 'percent' : 'amount',
+      value: Number(value?.value || 0),
+      min_amount: Number(form.querySelector('#cp-min')?.value || 0),
+      max_uses: limited?.checked ? Math.max(1, Number(max?.value || 1)) : 0,
+      course_ids: courseIds,
+      note: form.querySelector('#cp-note')?.value.trim() || '',
+      expires_at: form.querySelector('#cp-exp')?.value || null,
+      image_url: form.querySelector('#cp-img-preview img')?.getAttribute('src') || '',
+    };
+    if (!payload.code) { toast('กรุณากรอกโค้ด', 'error'); return; }
+    if (payload.value <= 0) { toast('กรุณากรอกมูลค่าส่วนลด', 'error'); return; }
+    try {
+      await ctx.data.saveCoupon(payload);
+      toast(payload.id ? 'บันทึกการแก้ไขแล้ว' : 'สร้างคูปองแล้ว', 'success');
+      location.hash = '#/dashboard?tab=coupons';
+      location.reload();
+    } catch (err) { toast(err.message || 'บันทึกไม่สำเร็จ', 'error'); }
   });
 }
 
@@ -809,6 +1038,36 @@ function bindAdmin(ctx, tab) {
         toast(box.checked ? 'แสดงในหน้าแรกแล้ว' : 'ซ่อนจากหน้าแรกแล้ว', 'success');
       } catch (err) { box.checked = !box.checked; toast(err.message || 'บันทึกไม่สำเร็จ', 'error'); }
     });
+  });
+
+  ctx._courses = (ctx._courses || []);
+  bindCouponForm(root, ctx);
+
+  root.querySelector('#cp-rand')?.addEventListener('click', () => {
+    const input = root.querySelector('#cp-code');
+    if (!input) return;
+    const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+    input.value = Array.from({ length: 7 }, () => chars[Math.floor(Math.random() * chars.length)]).join('');
+    input.dispatchEvent(new Event('input', { bubbles: true }));
+  });
+  root.querySelector('#cp-clear-courses')?.addEventListener('click', () => {
+    root.querySelectorAll('#cp-courses option').forEach((o) => { o.selected = false; });
+    root.querySelector('#cp-courses')?.dispatchEvent(new Event('change', { bubbles: true }));
+  });
+  root.querySelector('#cp-image')?.addEventListener('change', async (ev) => {
+    const file = ev.currentTarget.files?.[0];
+    if (!file) return;
+    try {
+      const url = await ctx.data.uploadCouponImage(file);
+      const box = root.querySelector('#cp-img-preview');
+      if (box) box.innerHTML = `<img src="${url}" alt="" class="coupon-img-preview">`;
+      toast('อัปโหลดรูปบัตรแล้ว', 'success');
+    } catch (err) { toast(err.message || 'อัปโหลดไม่สำเร็จ', 'error'); }
+  });
+  root.querySelector('#cp-img-remove')?.addEventListener('click', () => {
+    const box = root.querySelector('#cp-img-preview');
+    if (box) box.innerHTML = '';
+    toast('ลบรูปบัตรแล้ว', 'success');
   });
 
   root.querySelectorAll('[data-add-parent-to]').forEach((btn) => {
