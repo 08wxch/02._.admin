@@ -192,6 +192,47 @@ export async function saveSettings(patch) {
 }
 
 /* ── courses ──────────────────────────────────────────── */
+export async function listCategories() {
+  const { data, error } = await sb().from('bk_course_categories').select('*').order('sort_order').order('created_at');
+  if (error) throw error;
+  return data || [];
+}
+
+export async function saveCategory({ id, name }) {
+  const clean = { name: String(name || '').trim() };
+  if (!clean.name) throw new Error('กรุณากรอกชื่อหมวดหมู่');
+  if (id) {
+    const { error } = await sb().from('bk_course_categories').update(clean).eq('id', id);
+    if (error) throw new Error(friendly(error));
+    return id;
+  }
+  const { data: max } = await sb().from('bk_course_categories').select('sort_order').order('sort_order', { ascending: false }).limit(1);
+  clean.sort_order = (max?.[0]?.sort_order || 0) + 1;
+  const { data, error } = await sb().from('bk_course_categories').insert(clean).select('id').single();
+  if (error) throw new Error(friendly(error));
+  return data.id;
+}
+
+export async function deleteCategory(id) {
+  const { error } = await sb().from('bk_course_categories').delete().eq('id', id);
+  if (error) throw new Error(friendly(error));
+}
+
+export async function moveCategory(id, dir) {
+  const { error } = await sb().rpc('bk_move_category', { p_id: id, p_dir: dir });
+  if (error) throw new Error(error.message || 'สลับลำดับไม่สำเร็จ');
+}
+
+export async function moveCourse(id, dir) {
+  const { error } = await sb().rpc('bk_move_course', { p_id: id, p_dir: dir });
+  if (error) throw new Error(error.message || 'สลับลำดับไม่สำเร็จ');
+}
+
+export async function setCourseHome(id, show) {
+  const { error } = await sb().from('bk_courses').update({ show_on_home: Boolean(show) }).eq('id', id);
+  if (error) throw new Error(friendly(error));
+}
+
 export async function listCourses({ all = false } = {}) {
   let q = sb().from('bk_courses').select('*').order('sort_order').order('created_at');
   if (!all) q = q.eq('active', true);
@@ -220,6 +261,9 @@ export async function saveCourse(patch) {
     lessons: Number(patch.lessons || 0), seats: Number(patch.seats || 0), level: patch.level || '',
     subject: patch.subject || 'คณิตศาสตร์', active: patch.active !== false, sort_order: Number(patch.sort_order || 0),
   };
+  if (patch.category_id !== undefined) clean.category_id = patch.category_id || null;
+  if (patch.show_on_home !== undefined) clean.show_on_home = Boolean(patch.show_on_home);
+  if (patch.sort_order === undefined) delete clean.sort_order;
   if (patch.id) {
     const { error } = await sb().from('bk_courses').update(clean).eq('id', patch.id);
     if (error) throw new Error(friendly(error));

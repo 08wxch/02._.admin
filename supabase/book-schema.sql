@@ -1339,3 +1339,79 @@ returns jsonb language sql stable security definer set search_path = public as $
 $$;
 
 grant execute on function public.bk_class_names() to anon, authenticated;
+
+-- ════════════════════════════════════════════════════════════
+--  หมวดหมู่คอร์ส + ตั้งค่าแสดงหน้าแรก + เรียงลำดับ
+-- ════════════════════════════════════════════════════════════
+create table if not exists public.bk_course_categories (
+  id         uuid primary key default gen_random_uuid(),
+  name       text not null,
+  sort_order integer not null default 0,
+  created_at timestamptz not null default now()
+);
+
+alter table public.bk_courses add column if not exists category_id uuid references public.bk_course_categories(id) on delete set null;
+alter table public.bk_courses add column if not exists show_on_home boolean not null default true;
+alter table public.bk_courses add column if not exists sort_order integer not null default 0;
+
+alter table public.bk_course_categories enable row level security;
+
+drop policy if exists bk_cats_select on public.bk_course_categories;
+create policy bk_cats_select on public.bk_course_categories for select using (true);
+
+drop policy if exists bk_cats_write on public.bk_course_categories;
+create policy bk_cats_write on public.bk_course_categories
+  for all using (public.bk_is_owner()) with check (public.bk_is_owner());
+
+-- สลับลำดับคอร์ส (ภายในหมวดเดียวกัน)
+create or replace function public.bk_move_course(p_id uuid, p_dir integer)
+returns jsonb language plpgsql security definer set search_path = public as $$
+declare
+  v_cat uuid; v_order integer; v_other uuid; v_other_order integer;
+begin
+  if not public.bk_is_owner() then raise exception 'เฉพาะเจ้าของระบบ'; end if;
+  select category_id, sort_order into v_cat, v_order from public.bk_courses where id = p_id;
+  if v_order is null then return jsonb_build_object('ok', false); end if;
+
+  select id, sort_order into v_other, v_other_order
+  from public.bk_courses
+  where (category_id is not distinct from v_cat)
+    and (case when p_dir > 0 then sort_order > v_order else sort_order < v_order end)
+  order by (case when p_dir > 0 then sort_order end) asc,
+           (case when p_dir < 0 then sort_order end) desc
+  limit 1;
+
+  if v_other is null then return jsonb_build_object('ok', true, 'moved', false); end if;
+
+  update public.bk_courses set sort_order = v_other_order where id = p_id;
+  update public.bk_courses set sort_order = v_order where id = v_other;
+  return jsonb_build_object('ok', true, 'moved', true);
+end;
+$$;
+
+grant execute on function public.bk_move_course(uuid, integer) to authenticated;
+
+-- สลับลำดับหมวดหมู่
+create or replace function public.bk_move_category(p_id uuid, p_dir integer)
+returns jsonb language plpgsql security definer set search_path = public as $$
+declare v_order integer; v_other uuid; v_other_order integer;
+begin
+  if not public.bk_is_owner() then raise exception 'เฉพาะเจ้าของระบบ'; end if;
+  select sort_order into v_order from public.bk_course_categories where id = p_id;
+  if v_order is null then return jsonb_build_object('ok', false); end if;
+
+  select id, sort_order into v_other, v_other_order
+  from public.bk_course_categories
+  where (case when p_dir > 0 then sort_order > v_order else sort_order < v_order end)
+  order by (case when p_dir > 0 then sort_order end) asc,
+           (case when p_dir < 0 then sort_order end) desc
+  limit 1;
+
+  if v_other is null then return jsonb_build_object('ok', true, 'moved', false); end if;
+  update public.bk_course_categories set sort_order = v_other_order where id = p_id;
+  update public.bk_course_categories set sort_order = v_order where id = v_other;
+  return jsonb_build_object('ok', true, 'moved', true);
+end;
+$$;
+
+grant execute on function public.bk_move_category(uuid, integer) to authenticated;

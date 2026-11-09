@@ -11,7 +11,7 @@ export async function renderAdmin(_arg, ctx) {
   const tab = ctx.route?.query.get('tab') || fallbackTab;
   const editId = ctx.route?.query.get('edit') || '';
 
-  const [orders, courses, accounts, links, roster, coupons, orgs, teachersMock, studentsOverviewData, classMap] = await Promise.all([
+  const [orders, courses, accounts, links, roster, coupons, orgs, teachersMock, studentsOverviewData, classMap, categories] = await Promise.all([
     ctx.data.listAllOrders(),
     ctx.data.listCourses({ all: true }),
     ctx.data.listAccounts(),
@@ -22,6 +22,7 @@ export async function renderAdmin(_arg, ctx) {
     ctx.data.teachersList().catch(() => []),
     ctx.data.studentsOverview().catch(() => []),
     ctx.data.classNames().catch(() => ({})),
+    ctx.data.listCategories().catch(() => []),
   ]);
 
   const parents = accounts.filter((a) => a.role === 'parent');
@@ -42,7 +43,7 @@ export async function renderAdmin(_arg, ctx) {
   const body = tab === 'orders'
     ? ordersHtml(orders, ctx)
     : tab === 'courses'
-      ? coursesHtml(courses, editId, ctx)
+      ? coursesHtml(courses, editId, ctx, categories)
       : tab === 'coupons'
         ? couponsHtml(coupons, courses, editId, ctx)
         : tab === 'teachers'
@@ -150,61 +151,87 @@ function ordersHtml(orders, ctx) {
   </div>`;
 }
 
-/* ── คอร์ส ───────────────────────────────────────────── */
-function coursesHtml(courses, editId, ctx) {
+/* ── คอร์ส + หมวดหมู่ ───────────────────────────────── */
+function coursesHtml(courses, editId, ctx, categories = []) {
+  const isOwner = ctx.me?.role === 'owner';
   const editing = courses.find((c) => c.id === editId);
-  const open = Boolean(editing) || ctx.route?.query.get('new') === '1';
+  const newCatId = ctx.route?.query.get('new') === '1' ? (ctx.route?.query.get('cat') || '') : '';
+  const open = Boolean(editing) || Boolean(newCatId);
+
+  const grouped = categories.map((cat) => ({
+    cat,
+    items: courses.filter((c) => c.category_id === cat.id),
+  }));
+  const uncategorized = courses.filter((c) => !c.category_id || !categories.some((x) => x.id === c.category_id));
+
+  const card = (c, catId) => `
+    <div class="course-tile">
+      <label class="course-tile__home" title="แสดงในหน้าแรกของ 02._.book">
+        <input type="checkbox" data-home-toggle="${c.id}" ${c.show_on_home ? 'checked' : ''} ${isOwner ? '' : 'disabled'}>
+      </label>
+      <div class="course-tile__thumb">
+        ${c.image_url
+          ? `<img src="${e(c.image_url)}" alt="">`
+          : `<span>${e((c.subject || 'คอร์ส').slice(0, 10))}</span>`}
+      </div>
+      <div class="course-tile__body">
+        <div style="font-family:var(--brand-font);font-size:14.5px;line-height:1.3">${e(c.title)}</div>
+        <div class="tiny dim">${ctx.baht(c.price)} · ${c.seats ? `${c.seats} ที่นั่ง` : 'ไม่จำกัดที่นั่ง'}${c.active ? '' : ' · ปิดขาย'}</div>
+        <div style="display:flex;gap:6px;margin-top:8px;flex-wrap:wrap">
+          <a class="btn btn-ghost btn-sm" href="#/dashboard?tab=courses&edit=${c.id}">แก้ไข</a>
+          <button class="btn btn-ghost btn-sm" data-move-course="${c.id}" data-dir="-1" title="เลื่อนขึ้น">↑</button>
+          <button class="btn btn-ghost btn-sm" data-move-course="${c.id}" data-dir="1" title="เลื่อนลง">↓</button>
+          <button class="btn btn-ghost btn-sm" data-del-course="${c.id}" style="color:var(--red)">ลบ</button>
+        </div>
+      </div>
+    </div>`;
+
+  const section = (cat, items) => `
+    <div class="cat-bar">
+      <div class="cat-bar__name">${e(cat ? cat.name : 'ยังไม่จัดหมวด')}</div>
+      <div class="cat-bar__actions">
+        ${cat && isOwner ? `
+          <button class="btn btn-ghost btn-sm" data-move-cat="${cat.id}" data-dir="-1" title="เลื่อนหมวดขึ้น">↑</button>
+          <button class="btn btn-ghost btn-sm" data-move-cat="${cat.id}" data-dir="1" title="เลื่อนหมวดลง">↓</button>
+          <button class="btn btn-ghost btn-sm" data-edit-cat="${cat.id}" data-cat-name="${e(cat.name)}">เปลี่ยนชื่อ</button>
+          <button class="btn btn-ghost btn-sm" data-del-cat="${cat.id}" style="color:var(--red)">ลบหมวด</button>` : ''}
+        ${isOwner ? `<a class="btn btn-primary btn-sm" href="#/dashboard?tab=courses&new=1${cat ? `&cat=${cat.id}` : ''}">+ เพิ่มคอร์ส</a>` : ''}
+      </div>
+    </div>
+    <div class="course-grid-admin">
+      ${items.length ? items.map((c) => card(c, cat ? cat.id : '')).join('')
+        : '<div class="empty-soft" style="padding:18px;grid-column:1/-1"><span class="tiny dim">ยังไม่มีคอร์สในหมวดนี้</span></div>'}
+    </div>`;
 
   const list = `
     <div style="display:flex;justify-content:space-between;gap:12px;align-items:center;margin-bottom:14px;flex-wrap:wrap">
-      <div class="tiny dim">ทั้งหมด ${courses.length} คอร์ส</div>
-      ${ctx.me?.role === 'owner'
-        ? '<a class="btn btn-primary btn-sm" href="#/dashboard?tab=courses&new=1">+ เพิ่มคอร์ส</a>'
-        : '<span class="chip chip--warn">ดูได้อย่างเดียว — จัดการคอร์สได้เฉพาะเจ้าของระบบ</span>'}
+      <div class="tiny dim">${categories.length} หมวด · ${courses.length} คอร์ส</div>
+      ${isOwner ? '<button class="btn btn-primary btn-sm" id="add-category">+ เพิ่มหมวดหมู่</button>' : ''}
     </div>
-    ${courses.length ? `<div class="book-card" style="padding:8px 10px">
-      ${courses.map((c) => `
-        <div class="pair-row">
-          <a class="pair-row__left" href="#/course/${c.id}">
-            <span class="pair-row__avatar">${c.image_url
-              ? `<img src="${e(c.image_url)}" alt="" style="width:100%;height:100%;object-fit:cover;border-radius:50%">`
-              : e((c.title || '?').charAt(0))}</span>
-            <span class="pair-row__text">
-              <b>${e(c.title)}</b>
-              <span class="tiny dim">${ctx.baht(c.price)} · ${c.seats ? `${c.seats} ที่นั่ง` : 'ไม่จำกัดที่นั่ง'}${c.active ? '' : ' · ปิดขาย'}</span>
-            </span>
-          </a>
-          <div class="pair-row__right">
-            <a class="btn btn-ghost btn-sm" href="#/dashboard?tab=courses&edit=${c.id}">แก้ไข</a>
-            <button class="btn btn-ghost btn-sm" data-del-course="${c.id}" style="color:var(--red)">ลบ</button>
-          </div>
-        </div>`).join('')}
-    </div>` : `<div class="empty-soft"><b>ยังไม่มีคอร์ส</b>
-      <a class="btn btn-primary btn-sm" href="#/dashboard?tab=courses&new=1">เพิ่มคอร์สแรก</a></div>`}`;
+    ${grouped.map((g) => section(g.cat, g.items)).join('')}
+    ${uncategorized.length ? section(null, uncategorized) : ''}
+    ${!courses.length && !categories.length ? `<div class="empty-soft"><b>ยังไม่มีคอร์ส</b>
+      <p class="tiny dim" style="margin:0 0 10px">เริ่มจากกด "+ เพิ่มหมวดหมู่" ด้านบน</p></div>` : ''}`;
 
   if (!open) return list;
 
-  const preview = editing
-    ? ctx.courseCardForAdmin({ ...editing, left: editing.seats ? Math.max(0, editing.seats - (editing.sold || 0)) : null })
-    : `<div class="empty-soft" style="padding:40px 22px"><b>ตัวอย่างคอร์สจะขึ้นที่นี่</b>
-         <p class="tiny dim" style="margin:0">กรอกข้อมูลด้านขวาแล้วกดบันทึก ระบบจะแสดงตัวอย่างเหมือนที่ผู้ปกครองเห็น</p></div>`;
-
-  return `
-  <div class="course-editor">
-    <div class="course-editor__preview">
-      <div class="tiny dim" style="margin-bottom:8px">ตัวอย่างที่ผู้ปกครองเห็น</div>
-      ${preview}
-      <div style="margin-top:12px"><a class="btn btn-ghost btn-sm" href="#/dashboard?tab=courses">← กลับรายการคอร์ส</a></div>
-    </div>
-
+  const form = `
     <div class="book-card course-editor__form">
       <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;margin-bottom:10px">
         <div style="font-family:var(--brand-font);font-size:16px">${editing ? 'แก้ไขคอร์ส' : 'เพิ่มคอร์สใหม่'}</div>
+        <a class="btn btn-ghost btn-sm" href="#/dashboard?tab=courses">ปิด</a>
       </div>
       <input type="hidden" id="c-id" value="${editing ? editing.id : ''}">
       <div class="field-row"><label>ชื่อคอร์ส</label><input id="c-title" value="${e(editing?.title || '')}"></div>
       <div class="field-row"><label>คำโปรยสั้น</label><input id="c-sub" value="${e(editing?.subtitle || '')}"></div>
       <div class="field-row"><label>รายละเอียด</label><textarea id="c-detail">${e(editing?.detail || '')}</textarea></div>
+      <div class="field-row"><label>หมวดหมู่</label>
+        <select id="c-cat">
+          <option value="">— ไม่มีหมวด —</option>
+          ${categories.map((cat) => `<option value="${cat.id}" ${
+            (editing?.category_id === cat.id || (!editing && newCatId === cat.id)) ? 'selected' : ''}>${e(cat.name)}</option>`).join('')}
+        </select>
+      </div>
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
         <div class="field-row"><label>ราคา (บาท)</label><input id="c-price" type="number" min="0" step="50" value="${Number(editing?.price || 0)}"></div>
         <div class="field-row"><label>ระดับชั้น</label><input id="c-level" value="${e(editing?.level || '')}" placeholder="ม.4–ม.6"></div>
@@ -231,125 +258,27 @@ function coursesHtml(courses, editId, ctx) {
           ${editing?.image_url ? `<img src="${e(editing.image_url)}" class="coupon-img-preview" alt="">` : ''}
         </div>
       </div>
-      <div style="display:flex;gap:8px;margin-top:8px">
+      <label class="check-line" style="margin-top:6px">
+        <input type="checkbox" id="c-home" ${editing ? (editing.show_on_home ? 'checked' : '') : 'checked'}>
+        <span>แสดงในหน้าแรกของ 02._.book</span>
+      </label>
+      <div style="display:flex;gap:8px;margin-top:10px">
         <button class="btn btn-primary" id="c-save">${editing ? 'บันทึกการแก้ไข' : 'บันทึกคอร์ส'}</button>
         <a class="btn btn-ghost" href="#/dashboard?tab=courses">ยกเลิก</a>
       </div>
-    </div>
-  </div>`;
-}
+    </div>`;
 
-/* ── บัตรส่วนลด ───────────────────────────────────────── */
-function couponsHtml(coupons, courses, editId, ctx) {
-  const editing = coupons.find((c) => c.id === editId);
-  const showForm = Boolean(editing) || ctx.route?.query.get('new') === '1';
-  const courseName = (id) => courses.find((c) => c.id === id)?.title || '—';
-  const scopeText = (c) => ((c.course_ids || []).length
-    ? c.course_ids.map(courseName).join(' · ')
-    : 'ทุกคอร์ส');
-  const valueText = (c) => (c.kind === 'percent' ? `ลด ${c.value}%` : `ลด ${ctx.baht(c.value)}`);
+  const previewData = editing || {
+    title: 'ชื่อคอร์ส', subtitle: 'คำโปรยสั้น', price: 0, seats: 0, level: '', image_url: '',
+  };
+  const preview = `
+    <div class="course-editor__preview">
+      <div class="tiny dim" style="margin-bottom:8px">ตัวอย่างที่ผู้ปกครองเห็น</div>
+      ${ctx.courseCardForAdmin({ ...previewData, left: previewData.seats ? previewData.seats : null })}
+      <div style="margin-top:12px"><a class="btn btn-ghost btn-sm" href="#/dashboard?tab=courses">← กลับรายการคอร์ส</a></div>
+    </div>`;
 
-  return `
-  <div style="display:flex;justify-content:space-between;align-items:center;gap:12px;margin-bottom:14px;flex-wrap:wrap">
-    <div class="tiny dim">ทั้งหมด ${coupons.length} โค้ด</div>
-    ${ctx.me?.role === 'owner'
-      ? '<a class="btn btn-primary btn-sm" href="#/dashboard?tab=coupons&new=1">+ สร้างบัตรส่วนลด</a>'
-      : '<span class="chip chip--warn">ดูได้อย่างเดียว — สร้างบัตรได้เฉพาะเจ้าของระบบ</span>'}
-  </div>
-  <div class="${showForm ? 'book-grid-2' : ''}">
-    <div class="book-card">
-      <div style="font-family:var(--brand-font);font-size:16px;margin-bottom:10px">โค้ดทั้งหมด (${coupons.length})</div>
-      ${coupons.length ? `<div class="table-wrap"><table class="book-table coupon-table">
-        <thead><tr><th>โค้ด</th><th>ส่วนลด</th><th>ใช้กับ</th><th>ใช้แล้ว</th><th>สถานะ</th><th></th></tr></thead>
-        <tbody>${coupons.map((c) => `<tr>
-          <td>
-            ${c.image_url ? `<img src="${e(c.image_url)}" alt="" class="coupon-thumb">` : ''}
-            <b>${e(c.title || c.code)}</b>
-            <div class="tiny dim">${e(c.code)}${c.note ? ` · ${e(c.note)}` : ''}</div>
-          </td>
-          <td>${e(valueText(c))}</td>
-          <td class="tiny">${e(scopeText(c))}</td>
-          <td class="num">${c.used || 0}${c.max_uses ? ` / ${c.max_uses}` : ''}</td>
-          <td>${c.active ? '<span class="chip chip--ok">เปิด</span>' : '<span class="chip chip--mute">ปิด</span>'}</td>
-          <td style="white-space:nowrap">
-            <a class="btn btn-ghost btn-sm" href="#/dashboard?tab=coupons&edit=${c.id}">แก้ไข</a>
-            <button class="btn btn-ghost btn-sm" data-del-coupon="${c.id}" style="color:var(--red)">ลบ</button>
-          </td>
-        </tr>`).join('')}</tbody>
-      </table></div>` : `<p class="tiny dim">ยังไม่มีโค้ดส่วนลด</p>`}
-    </div>
-
-    ${showForm ? `<div class="book-card">
-      <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;margin-bottom:10px">
-        <div style="font-family:var(--brand-font);font-size:16px">${editing ? 'แก้ไขโค้ด' : 'สร้างโค้ดใหม่'}</div>
-        <a class="btn btn-ghost btn-sm" href="#/dashboard?tab=coupons">ปิด</a>
-      </div>
-      <input type="hidden" id="cp-id" value="${editing ? editing.id : ''}">
-      <div class="field-row"><label>โค้ด (ตัวอักษร/ตัวเลข)</label>
-        <div style="display:flex;gap:8px">
-          <input id="cp-code" value="${e(editing?.code || '')}" placeholder="MATH100" style="text-transform:uppercase">
-          <button class="btn btn-ghost btn-sm" id="cp-rand" type="button">สุ่มโค้ด</button>
-        </div>
-        <span class="hint">อยากตั้งเองก็พิมพ์ทับได้เลย</span></div>
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
-        <div class="field-row"><label>ประเภท</label>
-          <select id="cp-kind">
-            <option value="percent" ${editing?.kind !== 'amount' ? 'selected' : ''}>เปอร์เซ็นต์</option>
-            <option value="amount" ${editing?.kind === 'amount' ? 'selected' : ''}>จำนวนเงิน (บาท)</option>
-          </select></div>
-        <div class="field-row"><label>มูลค่า</label>
-          <input id="cp-value" type="number" min="0" value="${Number(editing?.value || 0)}"></div>
-        <div class="field-row"><label>ยอดขั้นต่ำ (บาท)</label>
-          <input id="cp-min" type="number" min="0" value="${Number(editing?.min_amount || 0)}"></div>
-      </div>
-      <div class="field-row">
-        <label class="check-line">
-          <input type="checkbox" id="cp-unlimited" ${!editing || !Number(editing?.max_uses) ? 'checked' : ''}>
-          <span>ใช้ได้ไม่จำกัดจำนวนครั้ง</span>
-        </label>
-        <input id="cp-max" type="number" min="1" value="${Number(editing?.max_uses || 10)}"
-          ${!editing || !Number(editing?.max_uses) ? 'disabled' : ''} placeholder="เช่น 10">
-      </div>
-      <div class="field-row">
-        <label>ใช้กับคอร์ส (ไม่เลือกเลย = ใช้ได้ทุกคอร์ส)</label>
-        <select id="cp-courses" multiple size="${Math.min(6, Math.max(3, courses.length))}" style="height:auto">
-          ${courses.map((c) => `<option value="${c.id}" ${(editing?.course_ids || []).includes(c.id) ? 'selected' : ''}>${e(c.title)}</option>`).join('')}
-        </select>
-        <div style="display:flex;gap:8px;margin-top:6px">
-          <button class="btn btn-ghost btn-sm" type="button" id="cp-clear-courses">ล้างการเลือก (ใช้ทุกคอร์ส)</button>
-          <span class="hint" style="align-self:center">กด Ctrl/⌘ ค้างเพื่อเลือกหลายคอร์ส</span>
-        </div>
-      </div>
-      <div class="field-row">
-        <label>ชื่อบัตรส่วนลด (แสดงให้ผู้ปกครองเห็น)</label>
-        <input id="cp-title" value="${e(editing?.title || '')}" placeholder="เช่น บัตรส่วนลดเปิดเทอม" maxlength="80">
-      </div>
-      <div class="field-row"><label>รูปบัตร (แนวนอน แนะนำ 1000×560 px · ไม่เกิน 1MB)</label>
-        <input type="file" id="cp-image" accept="image/*">
-        <div id="cp-img-preview" style="margin-top:8px">
-          ${editing?.image_url ? `<img src="${e(editing.image_url)}" alt="" class="coupon-img-preview">` : ''}
-        </div>
-        ${editing?.image_url ? '<button class="btn btn-ghost btn-sm" type="button" id="cp-img-remove" style="margin-top:6px">ลบรูปบัตร</button>' : ''}
-      </div>
-      <div class="field-row"><label>หมายเหตุ</label>
-        <input id="cp-note" value="${e(editing?.note || '')}" placeholder="เช่น โปรเปิดเทอม"></div>
-      <div class="field-row"><label>วันหมดอายุ (ไม่บังคับ)</label>
-        <input id="cp-exp" type="date" value="${editing?.expires_at ? String(editing.expires_at).slice(0, 10) : ''}"></div>
-      <div style="display:flex;gap:8px;margin-top:8px">
-        <button class="btn btn-primary" id="cp-save">${editing ? 'บันทึกการแก้ไข' : 'สร้างโค้ด'}</button>
-        ${editing ? `<a class="btn btn-ghost" href="#/dashboard?tab=coupons">ยกเลิก</a>` : ''}
-      </div>
-    </div>` : ''}
-  </div>`;
-}
-
-
-/** ครูเห็นเฉพาะผู้ปกครองที่มีนักเรียนในหน่วยงานตัวเอง */
-function scopeParents(parents, links, ctx) {
-  if (ctx.me?.role !== 'teacher') return parents;
-  const myOrg = ctx.me.org_id || '';
-  const ok = new Set(links.filter((l) => l.org_id === myOrg).map((l) => l.user_id));
-  return parents.filter((p) => ok.has(p.user_id) || (p.org_ids || []).includes(myOrg));
+  return `<div class="course-editor">${preview}${form}</div>`;
 }
 
 /* ── ครู (จาก 02._.mock) ─────────────────────────────── */
@@ -636,10 +565,93 @@ function bindListControls(root, ctx) {
     btn.addEventListener('click', () => openAddStudent(btn.dataset.addStudent, ctx));
   });
 
+  // ── หมวดหมู่คอร์ส ──────────────────────────────────────
+  const addCat = root.querySelector('#add-category');
+  if (addCat && !addCat.dataset.bound) {
+    addCat.dataset.bound = '1';
+    addCat.addEventListener('click', () => openCategoryDialog(ctx));
+  }
+  root.querySelectorAll('[data-edit-cat]').forEach((btn) => {
+    if (btn.dataset.bound) return;
+    btn.dataset.bound = '1';
+    btn.addEventListener('click', () => openCategoryDialog(ctx, { id: btn.dataset.editCat, name: btn.dataset.catName || '' }));
+  });
+  root.querySelectorAll('[data-del-cat]').forEach((btn) => {
+    if (btn.dataset.bound) return;
+    btn.dataset.bound = '1';
+    btn.addEventListener('click', async () => {
+      const ok = await confirmDialog({
+        title: 'ลบหมวดหมู่',
+        message: 'คอร์สในหมวดนี้จะยังอยู่ แต่จะกลายเป็น "ยังไม่จัดหมวด" — ยืนยันลบ?',
+        confirmLabel: 'ลบหมวด', tone: 'danger',
+      });
+      if (!ok) return;
+      try {
+        await ctx.data.deleteCategory(btn.dataset.delCat);
+        toast('ลบหมวดหมู่แล้ว', 'success');
+        location.reload();
+      } catch (err) { toast(err.message || 'ลบไม่สำเร็จ', 'error'); }
+    });
+  });
+  root.querySelectorAll('[data-move-cat]').forEach((btn) => {
+    if (btn.dataset.bound) return;
+    btn.dataset.bound = '1';
+    btn.addEventListener('click', async () => {
+      try { await ctx.data.moveCategory(btn.dataset.moveCat, Number(btn.dataset.dir)); location.reload(); }
+      catch (err) { toast(err.message || 'สลับลำดับไม่สำเร็จ', 'error'); }
+    });
+  });
+  root.querySelectorAll('[data-move-course]').forEach((btn) => {
+    if (btn.dataset.bound) return;
+    btn.dataset.bound = '1';
+    btn.addEventListener('click', async () => {
+      try { await ctx.data.moveCourse(btn.dataset.moveCourse, Number(btn.dataset.dir)); location.reload(); }
+      catch (err) { toast(err.message || 'สลับลำดับไม่สำเร็จ', 'error'); }
+    });
+  });
+  root.querySelectorAll('[data-home-toggle]').forEach((box) => {
+    if (box.dataset.bound) return;
+    box.dataset.bound = '1';
+    box.addEventListener('change', async () => {
+      try {
+        await ctx.data.setCourseHome(box.dataset.homeToggle, box.checked);
+        toast(box.checked ? 'แสดงในหน้าแรกแล้ว' : 'ซ่อนจากหน้าแรกแล้ว', 'success');
+      } catch (err) { box.checked = !box.checked; toast(err.message || 'บันทึกไม่สำเร็จ', 'error'); }
+    });
+  });
+
   root.querySelectorAll('[data-add-parent-to]').forEach((btn) => {
     if (btn.dataset.bound) return;
     btn.dataset.bound = '1';
     btn.addEventListener('click', () => openAddParentForStudent(btn.dataset.addParentTo, ctx));
+  });
+}
+
+
+/** หน้าต่างเพิ่ม/เปลี่ยนชื่อหมวดหมู่ */
+function openCategoryDialog(ctx, { id = '', name = '' } = {}) {
+  openModal({
+    title: id ? 'เปลี่ยนชื่อหมวดหมู่' : 'เพิ่มหมวดหมู่',
+    size: 'sm',
+    body: `<div class="field-row"><label>ชื่อหมวดหมู่</label>
+      <input id="cat-name" value="${e(name)}" maxlength="80" placeholder="เช่น คอร์สคณิต ม.ปลาย"></div>`,
+    footer: `<button class="btn btn-ghost" type="button" data-cancel-cat>ยกเลิก</button>
+             <button class="btn btn-primary" type="button" data-save-cat>บันทึก</button>`,
+    onMount: (root) => {
+      const input = root.querySelector('#cat-name');
+      setTimeout(() => input?.focus(), 40);
+      const save = async () => {
+        try {
+          await ctx.data.saveCategory({ id: id || undefined, name: input.value });
+          toast(id ? 'เปลี่ยนชื่อหมวดหมู่แล้ว' : 'เพิ่มหมวดหมู่แล้ว', 'success');
+          closeModal();
+          location.reload();
+        } catch (err) { toast(err.message || 'บันทึกไม่สำเร็จ', 'error'); }
+      };
+      root.querySelector('[data-save-cat]')?.addEventListener('click', save);
+      input?.addEventListener('keydown', (ev) => { if (ev.key === 'Enter') save(); });
+      root.querySelector('[data-cancel-cat]')?.addEventListener('click', closeModal);
+    },
   });
 }
 
@@ -744,6 +756,61 @@ function bindAdmin(ctx, tab) {
   root.querySelectorAll('[data-add-student]').forEach((btn) => {
     btn.addEventListener('click', () => openAddStudent(btn.dataset.addStudent, ctx));
   });
+  // ── หมวดหมู่คอร์ส ──────────────────────────────────────
+  const addCat = root.querySelector('#add-category');
+  if (addCat && !addCat.dataset.bound) {
+    addCat.dataset.bound = '1';
+    addCat.addEventListener('click', () => openCategoryDialog(ctx));
+  }
+  root.querySelectorAll('[data-edit-cat]').forEach((btn) => {
+    if (btn.dataset.bound) return;
+    btn.dataset.bound = '1';
+    btn.addEventListener('click', () => openCategoryDialog(ctx, { id: btn.dataset.editCat, name: btn.dataset.catName || '' }));
+  });
+  root.querySelectorAll('[data-del-cat]').forEach((btn) => {
+    if (btn.dataset.bound) return;
+    btn.dataset.bound = '1';
+    btn.addEventListener('click', async () => {
+      const ok = await confirmDialog({
+        title: 'ลบหมวดหมู่',
+        message: 'คอร์สในหมวดนี้จะยังอยู่ แต่จะกลายเป็น "ยังไม่จัดหมวด" — ยืนยันลบ?',
+        confirmLabel: 'ลบหมวด', tone: 'danger',
+      });
+      if (!ok) return;
+      try {
+        await ctx.data.deleteCategory(btn.dataset.delCat);
+        toast('ลบหมวดหมู่แล้ว', 'success');
+        location.reload();
+      } catch (err) { toast(err.message || 'ลบไม่สำเร็จ', 'error'); }
+    });
+  });
+  root.querySelectorAll('[data-move-cat]').forEach((btn) => {
+    if (btn.dataset.bound) return;
+    btn.dataset.bound = '1';
+    btn.addEventListener('click', async () => {
+      try { await ctx.data.moveCategory(btn.dataset.moveCat, Number(btn.dataset.dir)); location.reload(); }
+      catch (err) { toast(err.message || 'สลับลำดับไม่สำเร็จ', 'error'); }
+    });
+  });
+  root.querySelectorAll('[data-move-course]').forEach((btn) => {
+    if (btn.dataset.bound) return;
+    btn.dataset.bound = '1';
+    btn.addEventListener('click', async () => {
+      try { await ctx.data.moveCourse(btn.dataset.moveCourse, Number(btn.dataset.dir)); location.reload(); }
+      catch (err) { toast(err.message || 'สลับลำดับไม่สำเร็จ', 'error'); }
+    });
+  });
+  root.querySelectorAll('[data-home-toggle]').forEach((box) => {
+    if (box.dataset.bound) return;
+    box.dataset.bound = '1';
+    box.addEventListener('change', async () => {
+      try {
+        await ctx.data.setCourseHome(box.dataset.homeToggle, box.checked);
+        toast(box.checked ? 'แสดงในหน้าแรกแล้ว' : 'ซ่อนจากหน้าแรกแล้ว', 'success');
+      } catch (err) { box.checked = !box.checked; toast(err.message || 'บันทึกไม่สำเร็จ', 'error'); }
+    });
+  });
+
   root.querySelectorAll('[data-add-parent-to]').forEach((btn) => {
     btn.addEventListener('click', () => openAddParentForStudent(btn.dataset.addParentTo, ctx));
   });
@@ -766,6 +833,8 @@ function bindAdmin(ctx, tab) {
         lessons: Number(root.querySelector('#c-lessons').value),
         seats: root.querySelector('#c-unlimited').checked ? 0 : Number(root.querySelector('#c-seats').value || 0),
         level: root.querySelector('#c-level').value.trim(),
+        category_id: root.querySelector('#c-cat')?.value || null,
+        show_on_home: root.querySelector('#c-home')?.checked !== false,
         image_url: image_url || root.querySelector('#c-img-preview')?.querySelector('img')?.getAttribute('src') || '',
       });
       toast('บันทึกคอร์สแล้ว', 'success');
