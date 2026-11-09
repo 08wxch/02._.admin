@@ -47,7 +47,7 @@ export async function renderAdmin(_arg, ctx) {
       : tab === 'coupons'
         ? couponsHtml(coupons, courses, editId, ctx)
         : tab === 'teachers'
-          ? teachersHtml(teachersMock, ctx, orgs)
+          ? teachersHtml(teachersMock, ctx, orgs, studentsOverviewData)
           : tab === 'parents' || tab === 'users' || tab === 'links'
             ? parentsHtml(scopeParents(parents, links, ctx), links, ctx, orgs)
             : tab === 'students'
@@ -414,43 +414,66 @@ function couponsHtml(coupons, courses, editId, ctx) {
   return `<div class="course-editor">${preview}${form}</div>`;
 }
 
-/* ── ครู (จาก 02._.mock) ─────────────────────────────── */
-function teachersHtml(teachers, ctx, orgs) {
+/* ── ครูและบุคลากร (แบบเดียวกับ 02._.mock) ───────────── */
+function teachersHtml(teachers, ctx, orgs, students = []) {
   const orgFilter = ctx.route?.query.get('torg') || '';
-  const orgName = (id) => orgs.find((o) => o.id === id)?.name || id || '';
+  const orgName = (id) => orgs.find((o) => o.id === id)?.name || '';
   const shown = orgFilter ? teachers.filter((t) => t.orgId === orgFilter) : teachers;
 
+  const cards = shown.map((t) => {
+    const roleLabel = t.isOwner ? 'ผู้ดูแลระบบ' : 'ครูผู้สอน';
+    return `
+    <article class="staff-card ${t.isOwner ? 'staff-card--owner' : ''}">
+      <div class="staff-card__head">
+        <button class="staff-card__person" type="button" data-open-teacher="${e(t.code)}">
+          <span class="avatar avatar--md">${e((t.name || '?').trim().charAt(0))}</span>
+          <span class="staff-card__identity">
+            <strong>${e(t.name || '—')}</strong>
+            <span>${e(roleLabel)}</span>
+          </span>
+        </button>
+        ${t.isOwner ? '<span class="badge badge--neutral">OWNER</span>' : ''}
+      </div>
+      <div class="staff-card__code">
+        <span>รหัสครู</span><strong>${e(t.code || '—')}</strong>
+      </div>
+      <div class="staff-card__school">${e(t.orgName || orgName(t.orgId) || t.school || 'ไม่ระบุโรงเรียน')}</div>
+      <div class="staff-card__meta">
+        <div><span>นักเรียนในหน่วยงาน</span><strong>${students.filter((s) => s.orgId === t.orgId).length} คน</strong></div>
+        <div><span>วิชา</span><strong>${e(t.subject || '—')}</strong></div>
+      </div>
+      <div class="staff-card__foot">
+        <span>${t.phone ? `โทร ${e(t.phone)}` : 'ยังไม่มีข้อมูลติดต่อ'}</span>
+        <button class="btn btn-ghost btn-sm" type="button" data-open-teacher="${e(t.code)}">ดูข้อมูล</button>
+      </div>
+    </article>`;
+  }).join('');
+
   return `
+  <div class="staff-summary">
+    <div class="overview-metric"><span>ครูและบุคลากร</span><strong>${teachers.length} <small>คน</small></strong></div>
+    <div class="overview-metric"><span>หน่วยงานที่เห็น</span><strong>${orgFilter ? 1 : orgs.length} <small>แห่ง</small></strong></div>
+    <div class="overview-metric"><span>นักเรียนในขอบเขต</span><strong>${students.length} <small>คน</small></strong></div>
+    <div class="overview-metric"><span>แสดงอยู่</span><strong>${shown.length} <small>คน</small></strong></div>
+  </div>
+
   <div class="filter-bar">
     <span class="filter-bar__icon">
       <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 4h18l-7 8v6l-4 2v-8z"/></svg>
     </span>
     <select id="teacher-org" class="filter-select">
-      <option value="">ครูทั้งหมด (${teachers.length})</option>
-      ${orgs.map((o) => `<option value="${o.id}" ${orgFilter === o.id ? 'selected' : ''}>${e(o.name)}</option>`).join('')}
+      <option value="">ทุกหน่วยงาน (${teachers.length})</option>
+      ${orgs.map((o) => `<option value="${o.id}" ${orgFilter === o.id ? 'selected' : ''}>${e(o.name)} (${teachers.filter((t) => t.orgId === o.id).length})</option>`).join('')}
     </select>
+    <span class="filter-bar__label">แสดง ${shown.length} คน · ${e(orgFilter ? orgName(orgFilter) : 'ทุกหน่วยงาน')}</span>
   </div>
 
-  ${shown.length ? `<div class="book-card" style="padding:8px 10px">
-    ${shown.map((t) => `
-      <div class="pair-row">
-        <button class="pair-row__left" data-open-teacher="${e(t.code)}">
-          <span class="pair-row__avatar">${e((t.name || '?').trim().charAt(0))}</span>
-          <span class="pair-row__text">
-            <b style="font-size:16px">${e(t.name || '—')}${t.isOwner ? ' <span class="chip chip--ok">เจ้าของระบบ</span>' : ''}</b>
-            <span class="tiny dim">${e(t.orgName || orgName(t.orgId) || 'ไม่ระบุหน่วยงาน')}</span>
-          </span>
-        </button>
-        <div class="pair-row__right">
-          <span class="tiny dim">กดที่ชื่อเพื่อดูข้อมูลติดต่อ</span>
-        </div>
-      </div>`).join('')}
-  </div>` : `<div class="book-card" style="padding:22px;text-align:center">
-    <b>ยังไม่มีครู</b>
-    <p class="tiny dim" style="margin:6px 0 0">${orgFilter ? 'ยังไม่มีครูในโรงเรียน/หน่วยงานนี้' : 'ยังไม่มีครูในระบบ'}</p>
-  </div>`}`;
+  ${cards ? `<div class="staff-grid">${cards}</div>`
+    : `<div class="book-card" style="padding:26px;text-align:center">
+         <b>ยังไม่มีครู</b>
+         <p class="tiny dim" style="margin:6px 0 0">${orgFilter ? 'ยังไม่มีครูในหน่วยงานนี้' : 'ยังไม่มีครูในระบบ'}</p>
+       </div>`}`;
 }
-
 
 /* ── รายละเอียดครู ───────────────────────────────────── */
 async function openTeacherDetail(code, ctx) {
@@ -468,7 +491,7 @@ async function openTeacherDetail(code, ctx) {
       <div class="kv"><span>รหัสครู</span><b>${e(d.code)}</b></div>
       <div class="kv"><span>โรงเรียน / หน่วยงาน</span><b>${e(d.orgName || d.school || '—')}</b></div>
       ${d.subject ? `<div class="kv"><span>กลุ่มสาระ</span><b>${e(d.subject)}</b></div>` : ''}
-      <div class="kv"><span>เบอร์โทร (ที่ให้ไว้)</span><b>${e(d.phone || d.mockPhone || '—')}</b></div>
+      <div class="kv"><span>เบอร์โทร</span><b>${e(d.phone || d.mockPhone || '—')}</b></div>
       <div class="kv"><span>LINE ID</span><b>${e(d.lineId || '—')}</b></div>
       ${d.isOwner ? '<div class="kv"><span>สิทธิ์</span><b>เจ้าของระบบ — เห็นทุกหน่วยงาน</b></div>' : ''}
 
@@ -482,8 +505,8 @@ async function openTeacherDetail(code, ctx) {
       </div>
 
       <div style="display:flex;gap:10px;margin-top:14px">
-        <div class="stat-card" style="flex:1;padding:12px 14px"><div class="k">ผู้ปกครองที่ดูแล</div><div class="v" style="font-size:20px">${d.parents ?? 0}</div></div>
-        <div class="stat-card" style="flex:1;padding:12px 14px"><div class="k">นักเรียน</div><div class="v" style="font-size:20px">${d.students ?? 0}</div></div>
+        <div class="overview-metric" style="flex:1"><span>ผู้ปกครองที่ดูแล</span><strong>${d.parents ?? 0}</strong></div>
+        <div class="overview-metric" style="flex:1"><span>นักเรียน</span><strong>${d.students ?? 0}</strong></div>
       </div>`,
     footer: `<button class="btn btn-ghost" type="button" data-modal-close>ปิด</button>`,
   });

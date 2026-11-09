@@ -4030,3 +4030,48 @@ button.chip:hover { background: var(--mint-strong); }
   font-size: 13px; color: var(--ink);
 }
 .unit-row input[type="number"] { max-width: 160px; }
+
+/* ══ ครูและบุคลากร (สไตล์เดียวกับ 02._.mock) ═══════════ */
+.staff-summary { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-bottom: 15px; }
+.staff-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px; }
+.staff-card {
+  background: #fff; border: 1px solid var(--book-line); border-radius: 15px;
+  padding: 16px; display: flex; flex-direction: column; gap: 11px;
+}
+.staff-card--owner { background: var(--ink); border-color: var(--ink); color: #fff; }
+.staff-card__head { display: flex; align-items: center; gap: 9px; min-width: 0; }
+.staff-card__person {
+  display: flex; align-items: center; gap: 9px; min-width: 0; flex: 1;
+  padding: 0; border: 0; background: transparent; color: inherit; text-align: left;
+  font: inherit; cursor: pointer;
+}
+.staff-card__person:hover .staff-card__identity strong { text-decoration: underline; text-underline-offset: 3px; }
+.staff-card__identity { min-width: 0; flex: 1; }
+.staff-card__identity strong { display: block; font-size: 13.5px; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.staff-card__identity span { display: block; margin-top: 2px; font-size: 10.5px; color: var(--muted); }
+.staff-card--owner .staff-card__identity span { color: rgba(255, 255, 255, .6); }
+.staff-card__code {
+  display: flex; align-items: center; gap: 8px; padding: 8px 10px;
+  border-radius: 9px; background: var(--mint-soft); border: 1px solid var(--book-line);
+  font-size: 11px; color: var(--muted);
+}
+.staff-card__code strong { margin-left: auto; font-size: 12.5px; letter-spacing: .04em; color: var(--ink); }
+.staff-card--owner .staff-card__code { background: rgba(255, 255, 255, .09); border-color: rgba(255, 255, 255, .16); color: rgba(255, 255, 255, .6); }
+.staff-card--owner .staff-card__code strong { color: #fff; }
+.staff-card__school { font-size: 12px; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.staff-card--owner .staff-card__school { color: rgba(255, 255, 255, .7); }
+.staff-card__meta { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; padding-top: 10px; border-top: 1px solid var(--book-line); }
+.staff-card--owner .staff-card__meta { border-color: rgba(255, 255, 255, .16); }
+.staff-card__meta div { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.staff-card__meta span { font-size: 10px; color: var(--muted); }
+.staff-card__meta strong { font-size: 12.5px; font-weight: 500; }
+.staff-card--owner .staff-card__meta span { color: rgba(255, 255, 255, .55); }
+.staff-card__foot { display: flex; justify-content: space-between; align-items: center; gap: 8px; flex-wrap: wrap; font-size: 11px; color: var(--muted); }
+.staff-card--owner .staff-card__foot { color: rgba(255, 255, 255, .6); }
+.staff-card--owner .btn-ghost { color: #fff; border-color: rgba(255, 255, 255, .28); }
+.overview-metric { background: #fff; border: 1px solid var(--book-line); border-radius: 14px; padding: 13px 15px; }
+.overview-metric span { display: block; font-size: 11.5px; color: var(--muted); }
+.overview-metric strong { display: block; font-size: 22px; font-family: var(--brand-font); margin-top: 3px; }
+.overview-metric strong small { font-size: 11.5px; font-weight: 400; color: var(--muted); }
+@media (max-width: 1100px) { .staff-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } .staff-summary { grid-template-columns: 1fr 1fr; } }
+@media (max-width: 700px) { .staff-grid { grid-template-columns: 1fr; } .staff-summary { grid-template-columns: 1fr 1fr; } }
