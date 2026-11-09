@@ -525,6 +525,12 @@ export async function deleteParent(userId) {
 }
 
 /** รายชื่อครูทั้งหมดจาก 02._.mock (ไม่รวมอีเมล) */
+export async function scope() {
+  const { data, error } = await sb().rpc('bk_scope');
+  if (error) throw error;
+  return data;
+}
+
 export async function teachersList() {
   const { data, error } = await sb().rpc('bk_teachers_list');
   if (error) throw error;

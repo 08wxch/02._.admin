@@ -11,7 +11,7 @@ export async function renderAdmin(_arg, ctx) {
   const tab = ctx.route?.query.get('tab') || fallbackTab;
   const editId = ctx.route?.query.get('edit') || '';
 
-  const [orders, courses, accounts, links, roster, coupons, orgs, teachersMock, studentsOverviewData, classMap, categories] = await Promise.all([
+  const [orders, courses, accounts, links, roster, coupons, orgs, teachersMock, studentsOverviewData, classMap, categories, scope] = await Promise.all([
     ctx.data.listAllOrders(),
     ctx.data.listCourses({ all: true }),
     ctx.data.listAccounts(),
@@ -23,6 +23,7 @@ export async function renderAdmin(_arg, ctx) {
     ctx.data.studentsOverview().catch(() => []),
     ctx.data.classNames().catch(() => ({})),
     ctx.data.listCategories().catch(() => []),
+    ctx.data.scope().catch(() => ({ isOwner: true, canChooseOrg: true, orgIds: [] })),
   ]);
 
   const parents = accounts.filter((a) => a.role === 'parent');
@@ -47,7 +48,7 @@ export async function renderAdmin(_arg, ctx) {
       : tab === 'coupons'
         ? couponsHtml(coupons, courses, editId, ctx)
         : tab === 'teachers'
-          ? teachersHtml(teachersMock, ctx, orgs, studentsOverviewData)
+          ? teachersHtml(teachersMock, ctx, orgs, studentsOverviewData, scope)
           : tab === 'parents' || tab === 'users' || tab === 'links'
             ? parentsHtml(scopeParents(parents, links, ctx), links, ctx, orgs)
             : tab === 'students'
@@ -415,13 +416,20 @@ function couponsHtml(coupons, courses, editId, ctx) {
 }
 
 /* ── ครูและบุคลากร (แบบเดียวกับ 02._.mock) ───────────── */
-function teachersHtml(teachers, ctx, orgs, students = []) {
-  const orgFilter = ctx.route?.query.get('torg') || '';
+function teachersHtml(teachers, ctx, orgs, students = [], scope = {}) {
+  const canChoose = Boolean(scope?.canChooseOrg);
+  const allowedOrgs = canChoose
+    ? orgs
+    : orgs.filter((o) => (scope?.orgIds || []).includes(o.id) || o.id === scope?.myOrgId);
+
+  const requested = ctx.route?.query.get('torg') || '';
+  const orgFilter = canChoose ? (requested && allowedOrgs.some((o) => o.id === requested) ? requested : '') : (scope?.myOrgId || '');
   const orgName = (id) => orgs.find((o) => o.id === id)?.name || '';
-  const shown = orgFilter ? teachers.filter((t) => t.orgId === orgFilter) : teachers;
+  const scoped = canChoose ? teachers : teachers.filter((t) => (scope?.orgIds || []).includes(t.orgId) || t.isOwner === false && t.orgId === scope?.myOrgId);
+  const shown = orgFilter ? scoped.filter((t) => t.orgId === orgFilter) : scoped;
 
   const cards = shown.map((t) => {
-    const roleLabel = t.isOwner ? 'ผู้ดูแลระบบ' : 'ครูผู้สอน';
+    const roleLabel = t.isOwner ? 'ผู้ดูแลระบบ' : (t.roleLabel || (t.staffRole === 'manager' ? 'ผู้จัดการ' : 'ครูผู้สอน'));
     return `
     <article class="staff-card ${t.isOwner ? 'staff-card--owner' : ''}">
       <div class="staff-card__head">
@@ -461,10 +469,12 @@ function teachersHtml(teachers, ctx, orgs, students = []) {
     <span class="filter-bar__icon">
       <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 4h18l-7 8v6l-4 2v-8z"/></svg>
     </span>
-    <select id="teacher-org" class="filter-select">
-      <option value="">ทุกหน่วยงาน (${teachers.length})</option>
-      ${orgs.map((o) => `<option value="${o.id}" ${orgFilter === o.id ? 'selected' : ''}>${e(o.name)} (${teachers.filter((t) => t.orgId === o.id).length})</option>`).join('')}
-    </select>
+    ${canChoose ? `
+      <select id="teacher-org" class="filter-select">
+        <option value="">ทุกหน่วยงาน (${scoped.length})</option>
+        ${allowedOrgs.map((o) => `<option value="${o.id}" ${orgFilter === o.id ? 'selected' : ''}>${e(o.name)} (${scoped.filter((t) => t.orgId === o.id).length})</option>`).join('')}
+      </select>` : `
+      <span class="filter-select" style="pointer-events:none">${e(orgName(scope?.myOrgId) || 'หน่วยงานของคุณ')}</span>`}
     <span class="filter-bar__label">แสดง ${shown.length} คน · ${e(orgFilter ? orgName(orgFilter) : 'ทุกหน่วยงาน')}</span>
   </div>
 

@@ -1415,3 +1415,82 @@ end;
 $$;
 
 grant execute on function public.bk_move_category(uuid, integer) to authenticated;
+
+-- ── ขอบเขตการมองเห็น (เหมือน 02._.mock) ────────────────────
+-- คืนค่า: isOwner, staffRole, orgIds (หน่วยงานที่มองเห็นได้)
+create or replace function public.bk_scope()
+returns jsonb language plpgsql stable security definer set search_path = public as $$
+declare
+  v_state jsonb; v_acc public.bk_accounts; v_t jsonb; v_is_owner boolean := false;
+  v_staff text := 'teacher'; v_orgs jsonb := '[]'::jsonb;
+begin
+  select * into v_acc from public.bk_accounts where user_id = auth.uid();
+  if v_acc is null then raise exception 'ไม่มีสิทธิ์'; end if;
+  if v_acc.role = 'parent' then raise exception 'ไม่มีสิทธิ์'; end if;
+
+  select data into v_state from public.app_state where id = 'main';
+
+  select t into v_t
+  from jsonb_array_elements(coalesce(v_state->'teachers','[]'::jsonb)) t
+  where lower(t->>'code') = lower(coalesce(v_acc.teacher_code,''))
+  limit 1;
+
+  v_is_owner := coalesce(v_acc.role = 'owner', false) or coalesce((v_t->>'isOwner')::boolean, false);
+  v_staff := coalesce(nullif(v_t->>'staffRole',''), 'teacher');
+
+  if v_is_owner or v_staff = 'manager' then
+    -- เจ้าของเห็นทุกหน่วยงาน / ผู้จัดการเห็นทุกหน่วยงานที่ตนเองเข้าถึง (ตาม mock: เห็นทุกหน่วยงาน)
+    select coalesce(jsonb_agg(x->>'id'), '[]'::jsonb) into v_orgs
+    from jsonb_array_elements(coalesce(v_state->'organizations','[]'::jsonb)) x;
+  else
+    v_orgs := jsonb_build_array(coalesce(v_t->>'orgId', ''));
+  end if;
+
+  return jsonb_build_object(
+    'isOwner', v_is_owner,
+    'staffRole', v_staff,
+    'roleLabel', coalesce(nullif(v_t->>'roleLabel',''), case when v_staff = 'manager' then 'ผู้จัดการ' else 'ครูผู้สอน' end),
+    'canChooseOrg', v_is_owner or v_staff = 'manager',
+    'orgIds', v_orgs,
+    'myOrgId', coalesce(v_t->>'orgId','')
+  );
+end;
+$$;
+
+grant execute on function public.bk_scope() to authenticated;
+
+-- รายชื่อครูตามขอบเขต
+create or replace function public.bk_teachers_list()
+returns jsonb language plpgsql stable security definer set search_path = public as $$
+declare v_state jsonb; v_out jsonb := '[]'::jsonb; t jsonb; v_scope jsonb; v_can_choose boolean; v_my_org text;
+begin
+  v_scope := public.bk_scope();
+  v_can_choose := coalesce((v_scope->>'canChooseOrg')::boolean, false);
+  v_my_org := coalesce(v_scope->>'myOrgId','');
+
+  select data into v_state from public.app_state where id = 'main';
+  if v_state is null then return '[]'::jsonb; end if;
+
+  for t in select value from jsonb_array_elements(coalesce(v_state->'teachers','[]'::jsonb)) value loop
+    continue when not v_can_choose
+      and coalesce(t->>'orgId','') <> v_my_org
+      and not coalesce((t->>'isOwner')::boolean, false);
+    v_out := v_out || jsonb_build_array(jsonb_build_object(
+      'code', t->>'code',
+      'name', coalesce(t->>'name',''),
+      'orgId', coalesce(t->>'orgId',''),
+      'orgName', coalesce((select o->>'name' from jsonb_array_elements(coalesce(v_state->'organizations','[]'::jsonb)) o where o->>'id' = t->>'orgId' limit 1), ''),
+      'school', coalesce(t->>'school',''),
+      'subject', coalesce(t->>'subject',''),
+      'phone', coalesce(t->>'phone',''),
+      'isOwner', coalesce((t->>'isOwner')::boolean, false),
+      'staffRole', coalesce(nullif(t->>'staffRole',''), 'teacher'),
+      'roleLabel', coalesce(nullif(t->>'roleLabel',''), case when t->>'staffRole' = 'manager' then 'ผู้จัดการ' else 'ครูผู้สอน' end),
+      'accountName', coalesce((select a.name from public.bk_accounts a where lower(a.teacher_code) = lower(t->>'code') limit 1), '')
+    ));
+  end loop;
+  return v_out;
+end;
+$$;
+
+grant execute on function public.bk_teachers_list() to authenticated;
