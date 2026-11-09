@@ -277,6 +277,8 @@ export async function getCourse(id) {
 }
 
 export async function saveCourse(patch) {
+  if (!String(patch.title || '').trim()) throw new Error('กรุณากรอกชื่อคอร์ส');
+  if (Number(patch.price || 0) < 0) throw new Error('ราคาต้องไม่ติดลบ');
   const clean = {
     title: patch.title, subtitle: patch.subtitle || '', detail: patch.detail || '',
     image_url: patch.image_url || '', price: Number(patch.price || 0), hours: Number(patch.hours || 0),

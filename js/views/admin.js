@@ -1372,6 +1372,26 @@ function bindAdmin(ctx, tab) {
   root.querySelector('#c-save')?.addEventListener('click', async (ev) => {
     const btn = ev.currentTarget;
     const id = root.querySelector('#c-id').value || undefined;
+
+    // ตรวจข้อมูลก่อนบันทึก (กันคอร์สชื่อว่าง/ราคาติดลบ)
+    const titleVal = root.querySelector('#c-title').value.trim();
+    const priceVal = Number(root.querySelector('#c-price').value || 0);
+    if (!titleVal) {
+      toast('กรุณากรอกชื่อคอร์ส', 'error');
+      root.querySelector('#c-title')?.focus();
+      return;
+    }
+    if (priceVal < 0) {
+      toast('ราคาต้องไม่ติดลบ', 'error');
+      root.querySelector('#c-price')?.focus();
+      return;
+    }
+    const seatsVal = root.querySelector('#c-unlimited')?.checked ? 0 : Number(root.querySelector('#c-seats')?.value || 0);
+    if (!root.querySelector('#c-unlimited')?.checked && seatsVal < 1) {
+      toast('จำนวนที่นั่งต้องมากกว่า 0 หรือติ๊ก "ไม่จำกัดจำนวนคน"', 'error');
+      return;
+    }
+
     btn.disabled = true;
     try {
       let image_url = '';
