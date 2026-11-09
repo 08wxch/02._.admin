@@ -34,6 +34,8 @@ export async function renderAdmin(_arg, ctx) {
   }));
 
   ctx._roster = roster;
+  window.__bkStudents = studentsOverviewData || [];
+  window.__bkClassMap = classMap || {};
 
   const isOwner = ctx.me?.role === 'owner';
 
@@ -506,7 +508,7 @@ function studentsHtml(students, ctx, orgs, classMap = {}) {
 
   ${shown.length ? `<div class="book-card" style="padding:8px 10px">
     ${shown.map((st) => `
-      <div class="pair-row">
+      <div class="pair-row" data-row-org="${e(st.orgId || '')}" data-row-class="${e((st.classIds || []).join(','))}">
         <a class="pair-row__left" href="#/students/${encodeURIComponent(st.id)}">
           <span class="pair-row__avatar">${e((st.name || '?').trim().charAt(0))}</span>
           <span class="pair-row__text">
@@ -558,7 +560,33 @@ function bindListControls(root, ctx) {
     orgSel.addEventListener('change', (ev) => {
       const org = ev.currentTarget.value;
       const cls = root.querySelector('#student-class');
-      if (cls) { cls.value = ''; cls.disabled = !org; }
+      if (cls) {
+        cls.value = '';
+        cls.disabled = !org;
+        // เติม class ที่มีในโรงเรียนนั้นทันที (ไม่ต้องรอโหลดหน้าใหม่)
+        const byOrg = (window.__bkStudents || []).filter((st) => st.orgId === org);
+        const map = new Map();
+        byOrg.forEach((st) => (st.classIds || []).forEach((id) => {
+          const nm = st.classId === id ? (st.class || '') : ((window.__bkClassMap || {})[id] || '');
+          if (nm && !map.has(id)) map.set(id, nm);
+        }));
+        if (!map.size) byOrg.forEach((st) => { if (st.class) map.set(st.class, st.class); });
+        cls.innerHTML = `<option value="">ทุก class · ${byOrg.length} คน</option>`
+          + [...map.entries()].map(([id, nm]) => `<option value="${id}">${nm}</option>`).join('');
+
+        const labelEl2 = root.querySelector('.filter-bar__label');
+        if (labelEl2) labelEl2.textContent = `${ev.currentTarget.selectedOptions[0]?.text || ''} | ทุก class`;
+
+        // กรองรายการทันทีโดยไม่ต้องโหลดหน้าใหม่
+        const rows = root.querySelectorAll('.pair-row');
+        rows.forEach((row, i) => {
+          const st = byOrg[i];
+          row.style.display = st ? '' : 'none';
+        });
+        const listBox = root.querySelector('.book-card');
+        const empty = root.querySelector('.filter-bar + .book-card');
+        if (empty) empty.dataset.filtered = '1';
+      }
       const labelEl = root.querySelector('.filter-bar__label');
       if (labelEl) labelEl.textContent = `${ev.currentTarget.selectedOptions[0]?.text || ''} | ทุก class`;
       go(`#/dashboard?tab=students&sorg=${encodeURIComponent(org)}`);

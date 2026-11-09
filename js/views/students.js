@@ -228,7 +228,7 @@ async function studentDetail(studentId, ctx) {
   return ctx.consoleLayout({
     items: ctx.menuItems('students'),
     title: report?.student?.name || row.name || '',
-    subtitle: '',
+    subtitle: `<a class="tiny dim" href="#/dashboard?tab=students" style="text-decoration:none">← กลับรายชื่อนักเรียน</a>`,
     body: `
       <div class="detail-2col">
         <div>
