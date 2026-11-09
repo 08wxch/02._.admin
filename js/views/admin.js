@@ -145,7 +145,13 @@ function ordersHtml(orders, ctx) {
   </div>
 
   <div class="book-card">
-    <div style="font-family:var(--brand-font);font-size:16px;margin-bottom:10px">ประวัติล่าสุด</div>
+    <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:10px">
+      <div style="font-family:var(--brand-font);font-size:16px">ประวัติการชำระเงิน (${orders.length})</div>
+      <div style="display:flex;gap:6px;flex-wrap:wrap">
+        <button class="btn btn-ghost btn-sm" id="dl-orders">ดาวน์โหลดประวัติ (Excel)</button>
+        ${ctx.me?.role === 'owner' && history.length ? `<button class="btn btn-ghost btn-sm" id="clear-orders" style="color:var(--red)">ลบประวัติที่จบแล้ว (${history.filter((o) => o.status === 'confirmed' || o.status === 'rejected').length})</button>` : ''}
+      </div>
+    </div>
     <div class="table-wrap"><table class="book-table">
       <thead><tr><th>วันที่</th><th>ผู้ปกครอง</th><th>คอร์ส</th><th>ผู้เรียน</th><th>ยอด</th><th>สถานะ</th></tr></thead>
       <tbody>${history.map((o) => `<tr>
@@ -834,6 +840,39 @@ function bindHomeCms(root, ctx) {
   });
 }
 
+
+/** ดาวน์โหลดประวัติการชำระเงินเป็น CSV (เปิดใน Excel ได้) */
+function downloadOrdersCsv(rows) {
+  const head = ['วันที่', 'ผู้ปกครอง', 'อีเมล', 'เบอร์โทร', 'คอร์ส', 'ผู้เรียน', 'ยอด (บาท)', 'ส่วนลด', 'โค้ด', 'สถานะ', 'วันยืนยัน'];
+  const statusText = { confirmed: 'ยืนยันแล้ว', rejected: 'ไม่ผ่าน', pending_confirm: 'รอตรวจ', pending_payment: 'ยังไม่จ่าย' };
+  const esc = (v) => `"${String(v ?? '').replace(/"/g, '""')}"`;
+  const lines = [head.map(esc).join(',')];
+  rows.forEach((o) => {
+    lines.push([
+      thaiDateTime(o.created_at),
+      o.parent?.name || '',
+      o.parent?.email || '',
+      o.parent?.phone || '',
+      o.course_title || '',
+      o.student_name || '',
+      Number(o.amount || 0),
+      Number(o.discount || 0),
+      o.coupon_code || '',
+      statusText[o.status] || o.status,
+      o.confirmed_at ? thaiDateTime(o.confirmed_at) : '',
+    ].map(esc).join(','));
+  });
+  const blob = new Blob(['\ufeff' + lines.join('\r\n')], { type: 'text/csv;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `ประวัติการชำระเงิน-${new Date().toISOString().slice(0, 10)}.csv`;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 2000);
+}
+
 function bindListControls(root, ctx) {
   const go = (hash) => { location.hash = hash; window.dispatchEvent(new HashChangeEvent('hashchange')); };
 
@@ -1119,6 +1158,29 @@ function bindAdmin(ctx, tab) {
   bindListControls(root, ctx);
   bindCourseLivePreview(root, ctx);
   bindHomeCms(root, ctx);
+
+  root.querySelector('#dl-orders')?.addEventListener('click', async (ev) => {
+    if (ev.currentTarget.dataset.bound) return;
+    try {
+      const rows = await ctx.data.listAllOrders();
+      if (!rows.length) { toast('ยังไม่มีประวัติให้ดาวน์โหลด', 'error'); return; }
+      downloadOrdersCsv(rows);
+    } catch (err) { toast(err.message || 'ดาวน์โหลดไม่สำเร็จ', 'error'); }
+  });
+
+  root.querySelector('#clear-orders')?.addEventListener('click', async () => {
+    const ok = await confirmDialog({
+      title: 'ลบประวัติการชำระเงิน',
+      message: 'ลบรายการที่ยืนยันแล้วและไม่ผ่านการตรวจทั้งหมด พร้อมไฟล์สลิป — ลบแล้วกู้คืนไม่ได้ (แนะนำให้ดาวน์โหลดเก็บไว้ก่อน)',
+      confirmLabel: 'ลบทั้งหมด', tone: 'danger',
+    });
+    if (!ok) return;
+    try {
+      const n = await ctx.data.clearOrderHistory();
+      toast(`ลบประวัติแล้ว ${n} รายการ`, 'success');
+      location.reload();
+    } catch (err) { toast(err.message || 'ลบไม่สำเร็จ', 'error'); }
+  });
 
   root.querySelectorAll('[data-confirm]').forEach((btn) => {
     if (btn.closest('[data-preview]')) return;

@@ -497,8 +497,35 @@ export async function rejectOrder(orderId) {
 }
 
 export async function deleteOrder(orderId) {
-  const { error } = await sb().from('bk_orders').delete().eq('id', orderId);
-  if (error) throw error;
+  const order = await getOrder(orderId).catch(() => null);
+  if (order?.slip_path) {
+    const rm = await sb().storage.from(CONFIG.SLIP_BUCKET).remove([order.slip_path]);
+    if (rm.error) console.warn('ลบไฟล์สลิปไม่สำเร็จ', rm.error.message);
+  }
+  const { data: rows, error } = await sb().from('bk_orders').delete().eq('id', orderId).select('id');
+  if (error) throw new Error(friendly(error));
+  if (!rows || !rows.length) throw new Error('ลบไม่สำเร็จ — ไม่พบรายการหรือไม่มีสิทธิ์');
+}
+
+/** ลบประวัติการซื้อที่จบแล้ว (ยืนยัน/ไม่ผ่าน) ทั้งหมด — เฉพาะเจ้าของระบบ */
+export async function clearOrderHistory() {
+  const all = await listAllOrders();
+  const done = all.filter((o) => o.status === 'confirmed' || o.status === 'rejected');
+  return deleteOrdersBulk(done);
+}
+
+/** ลบรายการที่เลือก (หรือทั้งหมดเมื่อไม่ได้ระบุ) */
+export async function deleteOrdersBulk(rows) {
+  if (!rows.length) return 0;
+  const slips = rows.filter((o) => o.slip_path).map((o) => o.slip_path);
+  if (slips.length) {
+    const rm = await sb().storage.from(CONFIG.SLIP_BUCKET).remove(slips);
+    if (rm.error) console.warn('ลบไฟล์สลิปบางส่วนไม่สำเร็จ', rm.error.message);
+  }
+  const ids = rows.map((o) => o.id);
+  const { data: deleted, error } = await sb().from('bk_orders').delete().in('id', ids).select('id');
+  if (error) throw new Error(friendly(error));
+  return (deleted || []).length;
 }
 
 /* ── accounts (เจ้าของ / ครู) ─────────────────────────── */
