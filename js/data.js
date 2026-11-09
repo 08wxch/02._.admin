@@ -453,21 +453,47 @@ export async function downloadSlip(orderId, path) {
 /** เจ้าของกดยืนยัน → ลบไฟล์สลิปออกจาก Storage ทันที (ตามที่กำหนด) */
 export async function confirmOrder(orderId) {
   const order = await getOrder(orderId);
+
+  // ลอง RPC ที่ตรวจสิทธิ์ฝั่งเซิร์ฟเวอร์ก่อน (ปลอดภัยกว่าและใช้ได้กับทุกระบบ)
+  const rpc = await sb().rpc('bk_confirm_order', { p_id: orderId });
+  if (rpc.error) {
+    // ถ้า RPC ไม่พร้อม ใช้การอัปเดตตรง (มี RLS คุมอยู่แล้ว)
+    const { data: rows, error } = await sb().from('bk_orders')
+      .update({ status: 'confirmed', slip_path: '', confirmed_at: new Date().toISOString() })
+      .eq('id', orderId).select('id, status');
+    if (error) throw new Error(friendly(error));
+    if (!rows || !rows.length) throw new Error('อัปเดตสถานะไม่สำเร็จ — บัญชีนี้ไม่มีสิทธิ์ยืนยันออเดอร์นี้');
+  }
+
+  // ยืนยันว่าสถานะเปลี่ยนจริง
+  const after = await getOrder(orderId);
+  if (!after || after.status !== 'confirmed') {
+    throw new Error('อัปเดตสถานะไม่สำเร็จ — บัญชีนี้ไม่มีสิทธิ์ยืนยันออเดอร์นี้');
+  }
+
   if (order?.slip_path) {
     const rm = await sb().storage.from(CONFIG.SLIP_BUCKET).remove([order.slip_path]);
     if (rm.error) console.warn('ลบไฟล์สลิปไม่สำเร็จ', rm.error.message);
   }
-  const { error } = await sb().from('bk_orders')
-    .update({ status: 'confirmed', slip_path: '', confirmed_at: new Date().toISOString() })
-    .eq('id', orderId);
-  if (error) throw error;
+  return after;
 }
 
 export async function rejectOrder(orderId) {
   const order = await getOrder(orderId);
+
+  const rpc = await sb().rpc('bk_reject_order', { p_id: orderId });
+  if (rpc.error) {
+    const { data: rows, error } = await sb().from('bk_orders')
+      .update({ status: 'rejected', slip_path: '' }).eq('id', orderId).select('id, status');
+    if (error) throw new Error(friendly(error));
+    if (!rows || !rows.length) throw new Error('อัปเดตสถานะไม่สำเร็จ — บัญชีนี้ไม่มีสิทธิ์');
+  }
+
+  const after = await getOrder(orderId);
+  if (!after || after.status !== 'rejected') throw new Error('อัปเดตสถานะไม่สำเร็จ — บัญชีนี้ไม่มีสิทธิ์');
+
   if (order?.slip_path) await sb().storage.from(CONFIG.SLIP_BUCKET).remove([order.slip_path]);
-  const { error } = await sb().from('bk_orders').update({ status: 'rejected', slip_path: '' }).eq('id', orderId);
-  if (error) throw error;
+  return after;
 }
 
 export async function deleteOrder(orderId) {
