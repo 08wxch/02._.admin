@@ -306,26 +306,36 @@ function couponsHtml(coupons, courses, editId, ctx) {
       <div class="tiny dim">ทั้งหมด ${coupons.length} โค้ด</div>
       ${isOwner ? '<a class="btn btn-primary btn-sm" href="#/dashboard?tab=coupons&new=1">+ เพิ่มคูปอง</a>' : ''}
     </div>
-    <div class="book-card">
-      ${coupons.length ? `<div class="table-wrap"><table class="book-table coupon-table">
-        <thead><tr><th>โค้ด</th><th>ส่วนลด</th><th>ใช้กับ</th><th>ใช้แล้ว</th><th>สถานะ</th><th></th></tr></thead>
-        <tbody>${coupons.map((c) => `<tr>
-          <td>
-            ${c.image_url ? `<img src="${e(c.image_url)}" alt="" class="coupon-thumb">` : ''}
-            <b>${e(c.title || c.code)}</b>
-            <div class="tiny dim">${e(c.code)}${c.note ? ` · ${e(c.note)}` : ''}</div>
-          </td>
-          <td>${e(valueText(c))}</td>
-          <td class="tiny">${e(scopeText(c))}</td>
-          <td class="num">${c.used || 0}${c.max_uses ? ` / ${c.max_uses}` : ''}</td>
-          <td>${c.active ? '<span class="chip chip--ok">เปิด</span>' : '<span class="chip chip--mute">ปิด</span>'}</td>
-          <td style="white-space:nowrap">
-            <a class="btn btn-ghost btn-sm" href="#/dashboard?tab=coupons&edit=${c.id}">แก้ไข</a>
-            <button class="btn btn-ghost btn-sm" data-del-coupon="${c.id}" style="color:var(--red)">ลบ</button>
-          </td>
-        </tr>`).join('')}</tbody>
-      </table></div>` : `<p class="tiny dim">ยังไม่มีคูปอง — กด "+ เพิ่มคูปอง" เพื่อสร้างใบแรก</p>`}
-    </div>`;
+    ${coupons.length ? `<div class="coupon-grid-admin">
+      ${coupons.map((c) => `
+        <article class="coupon-card ${c.image_url ? 'has-image' : ''} ${c.active ? '' : 'is-off'}">
+          ${c.image_url
+            ? `<img class="coupon-card__img" src="${e(c.image_url)}" alt="${e(c.title || c.code)}">
+               <div class="coupon-card__state">${c.active ? '<span class="chip chip--ok">เปิดใช้</span>' : '<span class="chip chip--mute">ปิด</span>'}</div>`
+            : `<div class="coupon-card__body">
+                 <div class="coupon-card__value">${c.kind === 'percent' ? `${e(String(c.value))}%` : ctx.baht(c.value)}</div>
+                 <div class="coupon-card__text">
+                   <div class="coupon-card__title">${e(c.title || c.code)}</div>
+                   <div class="tiny dim">${e(scopeText(c))}</div>
+                   ${c.min_amount ? `<div class="tiny dim">ยอดขั้นต่ำ ${ctx.baht(c.min_amount)}</div>` : ''}
+                   <div class="tiny dim">${c.max_uses ? `ใช้ได้ ${c.used || 0}/${c.max_uses} ครั้ง` : `ใช้ไม่จำกัด · ใช้แล้ว ${c.used || 0}`}</div>
+                   <div class="tiny dim">${c.expires_at ? `ใช้ได้ถึง ${e(thaiDate(c.expires_at))}` : 'ไม่มีวันหมดอายุ'}</div>
+                 </div>
+                 <div class="coupon-card__right">${c.active ? '<span class="chip chip--ok">เปิด</span>' : '<span class="chip chip--mute">ปิด</span>'}</div>
+               </div>`}
+          <div class="coupon-card__admin">
+            <span class="coupon-card__code">${e(c.code)}</span>
+            <span style="display:flex;gap:6px">
+              <a class="btn btn-ghost btn-sm" href="#/dashboard?tab=coupons&edit=${c.id}">แก้ไข</a>
+              <button class="btn btn-ghost btn-sm" data-del-coupon="${c.id}" style="color:var(--red)">ลบ</button>
+            </span>
+          </div>
+        </article>`).join('')}
+    </div>` : `<div class="book-card" style="padding:26px;text-align:center">
+        <b>ยังไม่มีคูปอง</b>
+        <p class="tiny dim" style="margin:6px 0 14px">สร้างคูปองใบแรก แล้วผู้ปกครองจะเห็นในหน้าบัตรส่วนลดของ 02._.book</p>
+        ${isOwner ? '<a class="btn btn-primary btn-sm" href="#/dashboard?tab=coupons&new=1">+ เพิ่มคูปอง</a>' : ''}
+      </div>`}`;
 
   if (!open) return list;
 

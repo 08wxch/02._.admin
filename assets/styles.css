@@ -4111,3 +4111,24 @@ button.chip:hover { background: var(--mint-strong); }
 .cms-step__fields input, .cms-step__fields textarea { width: 100%; }
 .cms-step__actions { display: flex; flex-direction: column; gap: 4px; }
 .cms-step__actions .icon-btn { width: 28px; height: 28px; }
+
+/* ══ คูปองในแอดมิน: แสดงเป็นการ์ด ═══════════════════════ */
+.coupon-grid-admin { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 14px; }
+.coupon-grid-admin .coupon-card { background: #fff; border: 1px solid var(--book-line); border-radius: 16px; overflow: hidden; display: flex; flex-direction: column; }
+.coupon-grid-admin .coupon-card.is-off { opacity: .62; }
+.coupon-grid-admin .coupon-card__img { width: 100%; aspect-ratio: 16/9; object-fit: cover; display: block; }
+.coupon-grid-admin .coupon-card__body { display: flex; gap: 12px; padding: 16px; align-items: flex-start; }
+.coupon-grid-admin .coupon-card__value { font-family: var(--brand-font); font-size: 26px; line-height: 1; min-width: 74px; }
+.coupon-grid-admin .coupon-card__text { flex: 1; min-width: 0; }
+.coupon-grid-admin .coupon-card__title { font-family: var(--brand-font); font-size: 15px; margin-bottom: 3px; }
+.coupon-grid-admin .coupon-card__right { flex: 0 0 auto; }
+.coupon-grid-admin .coupon-card__state { position: absolute; top: 10px; right: 10px; }
+.coupon-grid-admin .coupon-card { position: relative; }
+.coupon-card__admin {
+  display: flex; justify-content: space-between; align-items: center; gap: 10px;
+  padding: 10px 14px; border-top: 1px solid var(--book-line); background: #fbf9f4;
+}
+.coupon-card__code {
+  font-family: var(--brand-font); font-size: 12.5px; letter-spacing: .04em;
+  background: var(--mint-soft); border: 1px solid var(--book-line); border-radius: 8px; padding: 4px 9px;
+}
