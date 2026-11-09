@@ -1421,7 +1421,6 @@ returns jsonb language plpgsql stable security definer set search_path = public 
 declare
   v_state jsonb; v_acc public.bk_accounts; v_t jsonb;
   v_is_owner boolean := false; v_staff text := 'teacher'; v_my_org text := '';
-  v_my_access text := 'own'; v_global boolean := false;
   v_ids jsonb := '[]'::jsonb; x jsonb;
 begin
   select * into v_acc from public.bk_accounts where user_id = auth.uid();
@@ -1439,16 +1438,13 @@ begin
   v_staff := coalesce(nullif(v_t->>'staffRole',''), 'teacher');
   v_my_org := coalesce(v_t->>'orgId','');
 
-  select coalesce(nullif(o->>'accessLevel',''), 'own') into v_my_access
-  from jsonb_array_elements(coalesce(v_state->'organizations','[]'::jsonb)) o
-  where o->>'id' = v_my_org limit 1;
-  v_my_access := coalesce(v_my_access, 'own');
-  v_global := v_is_owner or v_my_access in ('view_all', 'manage_all');
-
+  -- เจ้าของระบบ → ทุกหน่วยงาน
+  -- ผู้จัดการ → หน่วยงานของตน + หน่วยงานที่ไม่ได้ซ่อนจากส่วนกลาง (กฎเดียวกับ 02._.mock)
+  -- ครูทั่วไป → เฉพาะหน่วยงานของตน
   for x in select value from jsonb_array_elements(coalesce(v_state->'organizations','[]'::jsonb)) value loop
     if v_is_owner
        or coalesce(x->>'id','') = v_my_org
-       or (v_global and not coalesce((x->>'hiddenFromGlobal')::boolean, false)) then
+       or (v_staff = 'manager' and not coalesce((x->>'hiddenFromGlobal')::boolean, false)) then
       v_ids := v_ids || jsonb_build_array(x->>'id');
     end if;
   end loop;
@@ -1458,8 +1454,8 @@ begin
     'staffRole', v_staff,
     'roleLabel', coalesce(nullif(v_t->>'roleLabel',''), case when v_staff = 'manager' then 'ผู้จัดการ' else 'ครูผู้สอน' end),
     'isManager', v_staff = 'manager',
-    'hasAllOrgAccess', v_global,
-    'canChooseOrg', v_global,
+    'hasAllOrgAccess', v_is_owner or v_staff = 'manager',
+    'canChooseOrg', v_is_owner or v_staff = 'manager',
     'orgIds', v_ids,
     'myOrgId', v_my_org
   );
