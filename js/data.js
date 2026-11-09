@@ -531,6 +531,12 @@ export async function scope() {
   return data;
 }
 
+export async function organizationsFull() {
+  const { data, error } = await sb().rpc('bk_organizations_full');
+  if (error) throw error;
+  return data || [];
+}
+
 export async function teachersList() {
   const { data, error } = await sb().rpc('bk_teachers_list');
   if (error) throw error;

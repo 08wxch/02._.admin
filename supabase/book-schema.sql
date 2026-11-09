@@ -1497,3 +1497,30 @@ end;
 $$;
 
 grant execute on function public.bk_teachers_list() to authenticated;
+
+create or replace function public.bk_organizations_full()
+returns jsonb language plpgsql stable security definer set search_path = public as $$
+declare v_state jsonb; v_scope jsonb; v_ids jsonb; v_out jsonb := '[]'::jsonb; o jsonb;
+begin
+  v_scope := public.bk_scope();
+  v_ids := coalesce(v_scope->'orgIds','[]'::jsonb);
+  select data into v_state from public.app_state where id = 'main';
+  if v_state is null then return '[]'::jsonb; end if;
+  for o in select value from jsonb_array_elements(coalesce(v_state->'organizations','[]'::jsonb)) value loop
+    continue when not (v_ids ? coalesce(o->>'id',''));
+    v_out := v_out || jsonb_build_array(jsonb_build_object(
+      'id', o->>'id', 'name', o->>'name', 'shortName', coalesce(o->>'shortName',''),
+      'type', coalesce(o->>'type',''), 'accessLevel', coalesce(nullif(o->>'accessLevel',''),'own'),
+      'hiddenFromGlobal', coalesce((o->>'hiddenFromGlobal')::boolean, false),
+      'isMyOrg', coalesce(o->>'id','') = coalesce(v_scope->>'myOrgId',''),
+      'isOwnerOrg', coalesce(o->>'id','') = 'org_math',
+      'ownerCode', '02._.math',
+      'teachers', (select count(*) from jsonb_array_elements(coalesce(v_state->'teachers','[]'::jsonb)) t where t->>'orgId' = o->>'id'),
+      'students', (select count(*) from jsonb_array_elements(coalesce(v_state->'students','[]'::jsonb)) s where s->>'orgId' = o->>'id')
+    ));
+  end loop;
+  return v_out;
+end;
+$$;
+
+grant execute on function public.bk_organizations_full() to authenticated;
