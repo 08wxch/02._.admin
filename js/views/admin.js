@@ -11,7 +11,7 @@ export async function renderAdmin(_arg, ctx) {
   const tab = ctx.route?.query.get('tab') || fallbackTab;
   const editId = ctx.route?.query.get('edit') || '';
 
-  const [orders, courses, accounts, links, roster, coupons, orgs, teachersMock, studentsOverviewData, classMap, categories, scope, orgsFullData] = await Promise.all([
+  const [orders, courses, accounts, links, roster, coupons, orgs, teachersMock, studentsOverviewData, classMap, categories, scope] = await Promise.all([
     ctx.data.listAllOrders(),
     ctx.data.listCourses({ all: true }),
     ctx.data.listAccounts(),
@@ -24,7 +24,6 @@ export async function renderAdmin(_arg, ctx) {
     ctx.data.classNames().catch(() => ({})),
     ctx.data.listCategories().catch(() => []),
     ctx.data.scope().catch(() => ({ isOwner: true, canChooseOrg: true, orgIds: [] })),
-    ctx.data.organizationsFull().catch(() => []),
   ]);
 
   const parents = accounts.filter((a) => a.role === 'parent');
@@ -49,7 +48,7 @@ export async function renderAdmin(_arg, ctx) {
       : tab === 'coupons'
         ? couponsHtml(coupons, courses, editId, ctx)
         : tab === 'teachers'
-          ? teachersHtml(teachersMock, ctx, orgs, studentsOverviewData, scope, orgsFullData)
+          ? teachersHtml(teachersMock, ctx, orgs, studentsOverviewData, scope)
           : tab === 'parents' || tab === 'users' || tab === 'links'
             ? parentsHtml(scopeParents(parents, links, ctx), links, ctx, orgs, scope)
             : tab === 'students'
@@ -417,7 +416,7 @@ function couponsHtml(coupons, courses, editId, ctx) {
 }
 
 /* ── ครูและบุคลากร (แบบเดียวกับ 02._.mock) ───────────── */
-function teachersHtml(teachers, ctx, orgs, students = [], scope = {}, orgsFull = []) {
+function teachersHtml(teachers, ctx, orgs, students = [], scope = {}) {
   const canChoose = Boolean(scope?.canChooseOrg);
   const visibleIds = scope?.orgIds || [];
   const allowedOrgs = orgs.filter((o) => visibleIds.includes(o.id));
@@ -459,35 +458,7 @@ function teachersHtml(teachers, ctx, orgs, students = [], scope = {}, orgsFull =
     </article>`;
   }).join('');
 
-  const ownerCode = teachers.find((t) => t.isOwner)?.code || '02._.math';
-  const accessLabel = (o) => (o.accessLevel === 'manage_all' ? 'จัดการทุกหน่วยงาน'
-    : o.accessLevel === 'view_all' ? 'เห็นทุกหน่วยงาน' : 'เห็นเฉพาะหน่วยงาน');
-  const orgCards = (orgsFull || []).map((o) => `
-    <article class="org-card ${o.isOwnerOrg ? 'org-card--owner' : ''}">
-      <div class="org-card__top">
-        <span class="org-card__icon">${o.type === 'school' ? '🏫' : '◈'}</span>
-        <div class="org-card__identity">
-          <strong>${e(o.name)}</strong>
-          <span>${o.type === 'school' ? 'โรงเรียน' : 'สถาบัน'} · ชื่อย่อ <strong>${e(o.shortName || '—')}</strong></span>
-        </div>
-      </div>
-      <div class="org-card__stats">
-        <span>${o.teachers} คน</span><span>${o.students} นักเรียน</span>
-      </div>
-      <div class="org-card__hint">
-        ${o.isOwnerOrg ? `หน่วยงานของ ${e(ownerCode)}` : o.isMyOrg ? 'หน่วยงานของคุณ' : e(accessLabel(o))}
-        ${o.hiddenFromGlobal ? ' · ซ่อนจากส่วนกลาง' : ''}
-      </div>
-    </article>`).join('');
-
   return `
-  ${orgCards ? `<section class="org-section">
-    <div class="org-section__head">
-      <div><h2>หน่วยงานและโรงเรียน</h2><p>${e(scope?.isOwner ? 'คุณเห็นทุกหน่วยงาน' : scope?.isManager ? 'คุณเห็นหน่วยงานของตนและหน่วยงานที่เปิดให้เห็น' : 'คุณเห็นเฉพาะหน่วยงานของตนเอง')}</p></div>
-    </div>
-    <div class="org-grid">${orgCards}</div>
-  </section>` : ''}
-
   <div class="staff-summary">
     <div class="overview-metric"><span>ครูและบุคลากร</span><strong>${teachers.length} <small>คน</small></strong></div>
     <div class="overview-metric"><span>หน่วยงานที่เห็น</span><strong>${orgFilter ? 1 : allowedOrgs.length} <small>แห่ง</small></strong></div>
