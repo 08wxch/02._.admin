@@ -262,6 +262,22 @@ function bindConsoleNav() {
 
   if (toggle.dataset.bound) return;
   toggle.dataset.bound = '1';
+
+  // ปุ่มออกจากระบบ (ท้ายแถบดำ) — ต้องยืนยันก่อน
+  const logoutBtn = document.querySelector('.sidebar-profile__actions [data-signout]');
+  if (logoutBtn && !logoutBtn.dataset.bound) {
+    logoutBtn.dataset.bound = '1';
+    logoutBtn.addEventListener('click', async () => {
+      const ok = await confirmDialog({
+        title: 'ออกจากระบบ',
+        message: 'ต้องการออกจากระบบใช่ไหม?',
+        confirmLabel: 'ออกจากระบบ',
+      });
+      if (!ok) return;
+      await data.signOut();
+      location.hash = '#/login';
+    });
+  }
   toggle.addEventListener('click', () => setOpen(!nav.classList.contains('is-open')));
   document.getElementById('console-nav-close')?.addEventListener('click', () => setOpen(false));
   scrim?.addEventListener('click', () => setOpen(false));

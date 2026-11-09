@@ -1305,7 +1305,8 @@ button:focus-visible, a:focus-visible, input:focus-visible, textarea:focus-visib
 .sidebar-profile .avatar { background: rgba(255, 255, 255, .1); color: #eaeaea; border-color: rgba(255, 255, 255, .07); }
 .sidebar-profile__copy { min-width: 0; flex: 1; }
 .sidebar-profile__copy strong { display: block; font-size: 10.5px; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.sidebar-profile__copy span { display: block; font-size: 8.5px; color: rgba(242, 242, 242, .4); margin-top: 1px; }
+.sidebar-profile__copy .sidebar-profile__text span { display: block; font-size: 8.5px; color: rgba(242, 242, 242, .4); margin-top: 1px; }
+.sidebar-profile__copy .avatar { display: inline-flex; align-items: center; justify-content: center; line-height: 1; font-size: 13px; font-weight: 600; }
 .sidebar-profile__actions { display: flex; gap: 2px; }
 .sidebar-profile__actions .icon-btn { width: 28px; height: 28px; border-radius: 8px; color: rgba(255, 255, 255, .55); background: transparent; border-color: transparent; }
 .sidebar-profile__actions .icon-btn:hover { background: rgba(255, 255, 255, .08); color: #ffffff; }
@@ -3978,7 +3979,7 @@ button.chip:hover { background: var(--mint-strong); }
 .filter-bar__label { margin-left: auto; font-size: 12.5px; color: var(--muted); }
 
 /* แถวโปรไฟล์ในแถบดำ: ทั้งแถวกดได้ */
-.sidebar-profile__copy { display: flex; align-items: center; gap: 9px; }
+.sidebar-profile__copy { display: flex; align-items: center; gap: 9px; min-height: 34px; }
 .sidebar-profile__text { display: flex; flex-direction: column; line-height: 1.25; min-width: 0; }
 .sidebar-profile__text strong { display: block; font-size: 11.5px; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .sidebar-profile__text span { display: block; font-size: 9px; color: rgba(242, 242, 242, .45); }
