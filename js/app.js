@@ -312,11 +312,41 @@ function renderHeaderState() {
   // ไม่มี header เว็บใน 02._.admin — ใช้แถบบนของคอนโซลที่มากับแต่ละหน้า
 }
 
+
+/* ── แยกเซสชันจาก 02._.mock / 02._.form โดยเด็ดขาด ───────
+   เก็บกวาดคีย์ของระบบอื่นไม่ให้ค้างในเครื่องนี้ และต้องมีบัญชีของ admin เท่านั้น */
+const OWN_KEYS = ['book02_admin_auth_v2'];
+const FOREIGN_KEYS = ['examio_cloud_auth_v1', 'formio_auth_v1', 'book02_auth_v1', 'book02_ADMIN_auth_v1', 'examio_demo_db_v2', 'examio_demo_session_v2'];
+
+function clearForeignSessions() {
+  try {
+    FOREIGN_KEYS.forEach((k) => {
+      localStorage.removeItem(k);
+      sessionStorage.removeItem(k);
+    });
+    // คีย์ Supabase ที่อาจค้างจากชื่อเดียวกันแต่ระบบอื่น
+    Object.keys(localStorage).forEach((k) => {
+      if (OWN_KEYS.some((own) => k.startsWith(own))) return;
+      // คีย์ session ของ Supabase ที่ระบบอื่นใช้ชื่อเดียวกัน (ไม่ใช่ของ admin)
+      if (/^sb-.*-auth-token/.test(k)) localStorage.removeItem(k);
+    });
+  } catch (err) { /* ignore */ }
+}
+
 let blockedMessage = '';
 
 /** เฉพาะครู/เจ้าของระบบเท่านั้นที่เข้า 02._.admin ได้ */
 async function enforceStaffOnly() {
+  clearForeignSessions();
   const acc = data.getAccount();
+  // บัญชีที่ล็อกอินต้องมีอยู่ในระบบของ 02._.admin เท่านั้น (ไม่รับ session ที่ล็อกอินจากเว็บอื่น)
+  if (acc && !acc.teacher_code && acc.role !== 'owner' && acc.role !== 'teacher') {
+    await data.signOut();
+    me = null; ctx.me = null;
+    blockedMessage = 'บัญชีนี้ไม่ได้อยู่ในระบบหลังบ้าน — กรุณาล็อกอินด้วยบัญชีครู/เจ้าของระบบ';
+    return false;
+  }
+  if (!acc) return true;
   if (acc && acc.role === 'parent') {
     const email = acc.email || '';
     await data.signOut();
