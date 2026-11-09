@@ -446,11 +446,6 @@ function teachersHtml(teachers, ctx, orgs, students = [], scope = {}) {
       <div class="staff-card__code">
         <span>รหัสครู</span><strong>${e(t.code || '—')}</strong>
       </div>
-      <div class="staff-card__school">${e(t.orgName || orgName(t.orgId) || t.school || 'ไม่ระบุโรงเรียน')}</div>
-      <div class="staff-card__meta">
-        <div><span>นักเรียนในหน่วยงาน</span><strong>${students.filter((s) => s.orgId === t.orgId).length} คน</strong></div>
-        <div><span>วิชา</span><strong>${e(t.subject || '—')}</strong></div>
-      </div>
       <div class="staff-card__foot">
         <span>${t.phone || t.accountPhone ? `โทร ${e(t.phone || t.accountPhone)}` : (t.accountLine ? `LINE ${e(t.accountLine)}` : 'ยังไม่มีข้อมูลติดต่อ')}</span>
         <button class="btn btn-ghost btn-sm" type="button" data-open-teacher="${e(t.code)}">ดูข้อมูล</button>
@@ -486,7 +481,7 @@ function teachersHtml(teachers, ctx, orgs, students = [], scope = {}) {
        </div>`}`;
 }
 
-/* ── รายละเอียดครู ───────────────────────────────────── */
+/* ── รายละเอียดครู (ข้อมูลติดต่อเพื่อประสานงาน) ───────── */
 async function openTeacherDetail(code, ctx) {
   let d;
   try { d = await ctx.data.teacherDetail(code); } catch (err) {
@@ -500,25 +495,10 @@ async function openTeacherDetail(code, ctx) {
     size: 'sm',
     body: `
       <div class="kv"><span>รหัสครู</span><b>${e(d.code)}</b></div>
-      <div class="kv"><span>โรงเรียน / หน่วยงาน</span><b>${e(d.orgName || d.school || '—')}</b></div>
       ${d.subject ? `<div class="kv"><span>กลุ่มสาระ</span><b>${e(d.subject)}</b></div>` : ''}
       <div class="kv"><span>เบอร์โทร</span><b>${e(d.phone || d.mockPhone || '—')}</b></div>
       <div class="kv"><span>LINE ID</span><b>${e(d.lineId || '—')}</b></div>
-      ${d.isOwner ? '<div class="kv"><span>สิทธิ์</span><b>เจ้าของระบบ — เห็นทุกหน่วยงาน</b></div>' : ''}
-
-      <div style="margin-top:14px;border-top:1px solid var(--book-line);padding-top:12px">
-        <div class="tiny dim" style="margin-bottom:6px">หน่วยงาน/โรงเรียนที่มองเห็น</div>
-        <div style="display:flex;gap:6px;flex-wrap:wrap">
-          ${(d.orgs || []).length
-            ? (d.orgs || []).map((o) => `<span class="chip chip--mute">${e(o.name)}</span>`).join('')
-            : '<span class="tiny dim">—</span>'}
-        </div>
-      </div>
-
-      <div style="display:flex;gap:10px;margin-top:14px">
-        <div class="overview-metric" style="flex:1"><span>ผู้ปกครองที่ดูแล</span><strong>${d.parents ?? 0}</strong></div>
-        <div class="overview-metric" style="flex:1"><span>นักเรียน</span><strong>${d.students ?? 0}</strong></div>
-      </div>`,
+      ${d.isOwner ? '<div class="kv"><span>สิทธิ์</span><b>เจ้าของระบบ</b></div>' : ''}`,
     footer: `<button class="btn btn-ghost" type="button" data-modal-close>ปิด</button>`,
   });
 }
