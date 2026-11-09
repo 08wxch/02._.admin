@@ -1327,3 +1327,15 @@ end;
 $$;
 
 grant execute on function public.bk_teacher_detail(text) to authenticated;
+
+-- หน่วยงาน + ชื่อ class (สำหรับตัวกรองนักเรียน 2 ขั้น)
+create or replace function public.bk_class_names()
+returns jsonb language sql stable security definer set search_path = public as $$
+  select coalesce(jsonb_object_agg(id, name), '{}'::jsonb) from (
+    select c->>'id' as id, coalesce(nullif(c->>'name',''), c->>'code') as name
+    from public.app_state s, jsonb_array_elements(coalesce(s.data->'classes','[]'::jsonb)) c
+    where s.id = 'main' and (c->>'id') is not null
+  ) t;
+$$;
+
+grant execute on function public.bk_class_names() to anon, authenticated;

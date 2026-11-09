@@ -493,6 +493,12 @@ export async function teacherDetail(code) {
   return data;
 }
 
+export async function classNames() {
+  const { data, error } = await sb().rpc('bk_class_names');
+  if (error) throw error;
+  return data || {};
+}
+
 export async function listOrganizations() {
   const { data, error } = await sb().rpc('bk_organizations');
   if (error) throw error;

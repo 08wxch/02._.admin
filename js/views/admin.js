@@ -11,7 +11,7 @@ export async function renderAdmin(_arg, ctx) {
   const tab = ctx.route?.query.get('tab') || fallbackTab;
   const editId = ctx.route?.query.get('edit') || '';
 
-  const [orders, courses, accounts, links, roster, coupons, orgs, teachersMock, studentsOverviewData] = await Promise.all([
+  const [orders, courses, accounts, links, roster, coupons, orgs, teachersMock, studentsOverviewData, classMap] = await Promise.all([
     ctx.data.listAllOrders(),
     ctx.data.listCourses({ all: true }),
     ctx.data.listAccounts(),
@@ -21,6 +21,7 @@ export async function renderAdmin(_arg, ctx) {
     ctx.data.listOrganizations().catch(() => []),
     ctx.data.teachersList().catch(() => []),
     ctx.data.studentsOverview().catch(() => []),
+    ctx.data.classNames().catch(() => ({})),
   ]);
 
   const parents = accounts.filter((a) => a.role === 'parent');
@@ -47,7 +48,7 @@ export async function renderAdmin(_arg, ctx) {
           : tab === 'parents' || tab === 'users' || tab === 'links'
             ? parentsHtml(scopeParents(parents, links, ctx), links, ctx, orgs)
             : tab === 'students'
-              ? studentsHtml(studentsOverviewData, ctx, orgs)
+              ? studentsHtml(studentsOverviewData, ctx, orgs, classMap)
               : settingsHtml(ctx);
 
   const isOwnerRole = ctx.me?.role === 'owner';
@@ -466,17 +467,26 @@ function parentsHtml(parents, links, ctx, orgs) {
 }
 
 /* ── นักเรียน ────────────────────────────────────────── */
-function studentsHtml(students, ctx, orgs) {
+function studentsHtml(students, ctx, orgs, classMap = {}) {
   const orgFilter = ctx.route?.query.get('sorg') || '';
   const classFilter = ctx.route?.query.get('sclass') || '';
   const orgName = (id) => orgs.find((o) => o.id === id)?.name || id || '';
+  const className = (id) => classMap[id] || '';
 
-  // รายการ class ที่มีจริง (อ้างจากนักเรียนในหน่วยงานที่เลือก)
+  // รายการ class ที่มีจริงในหน่วยงานที่เลือก: id → ชื่อ
   const inOrg = orgFilter ? students.filter((s) => s.orgId === orgFilter) : students;
-  const classes = [...new Set(inOrg.map((s) => s.class).filter(Boolean))].sort();
+  const classOptions = new Map();
+  inOrg.forEach((s) => {
+    (s.classIds || []).forEach((id) => {
+      const nm = s.classId === id ? (s.class || className(id)) : className(id);
+      if (nm && !classOptions.has(id)) classOptions.set(id, nm);
+    });
+  });
+  if (!classOptions.size) inOrg.forEach((s) => { if (s.class) classOptions.set(s.class, s.class); });
 
-  const shown = inOrg.filter((s) => !classFilter || s.class === classFilter);
-  const label = [orgFilter ? orgName(orgFilter) : 'ทุกโรงเรียน/หน่วยงาน', classFilter || 'ทุก class'].join(' | ');
+  const shown = inOrg.filter((s) => !classFilter || (s.classIds || []).includes(classFilter) || s.class === classFilter);
+  const pickedClass = classFilter ? (classOptions.get(classFilter) || className(classFilter) || classFilter) : '';
+  const label = [orgFilter ? orgName(orgFilter) : 'ทุกโรงเรียน/หน่วยงาน', pickedClass || 'ทุก class'].join(' | ');
 
   return `
   <div class="filter-bar">
@@ -488,8 +498,8 @@ function studentsHtml(students, ctx, orgs) {
       ${orgs.map((o) => `<option value="${o.id}" ${orgFilter === o.id ? 'selected' : ''}>${e(o.name)}</option>`).join('')}
     </select>
     <select id="student-class" class="filter-select" ${orgFilter ? '' : 'disabled title="เลือกโรงเรียน/หน่วยงานก่อน"'}>
-      <option value="">ทุก class${orgFilter ? ` (${inOrg.length})` : ''}</option>
-      ${classes.map((c) => `<option value="${e(c)}" ${classFilter === c ? 'selected' : ''}>${e(c)}</option>`).join('')}
+      <option value="">ทุก class${orgFilter ? ` · ${inOrg.length} คน` : ''}</option>
+      ${[...classOptions.entries()].map(([id, nm]) => `<option value="${e(id)}" ${classFilter === id ? 'selected' : ''}>${e(nm)}</option>`).join('')}
     </select>
     <span class="filter-bar__label">${e(label)}</span>
   </div>
@@ -501,7 +511,7 @@ function studentsHtml(students, ctx, orgs) {
           <span class="pair-row__avatar">${e((st.name || '?').trim().charAt(0))}</span>
           <span class="pair-row__text">
             <b>${e(st.name || st.id)}</b>
-            <span class="tiny dim">${e(st.code || '')} · ${e(orgName(st.orgId))}</span>
+            <span class="tiny dim">${e(st.code || '')} · ${e(orgName(st.orgId))}${st.class ? ` · ${e(st.class)}` : ''}</span>
           </span>
         </a>
         <div class="pair-row__right">
@@ -537,8 +547,77 @@ function settingsHtml(ctx) {
 }
 
 /* ── events ──────────────────────────────────────────── */
+
+/** ผูกตัวกรอง (หน่วยงาน/class) + ปุ่ม + ในรายการ — กันผูกซ้ำ */
+function bindListControls(root, ctx) {
+  const go = (hash) => { location.hash = hash; window.dispatchEvent(new HashChangeEvent('hashchange')); };
+
+  const orgSel = root.querySelector('#student-org');
+  if (orgSel && !orgSel.dataset.bound) {
+    orgSel.dataset.bound = '1';
+    orgSel.addEventListener('change', (ev) => {
+      const org = ev.currentTarget.value;
+      const cls = root.querySelector('#student-class');
+      if (cls) { cls.value = ''; cls.disabled = !org; }
+      const labelEl = root.querySelector('.filter-bar__label');
+      if (labelEl) labelEl.textContent = `${ev.currentTarget.selectedOptions[0]?.text || ''} | ทุก class`;
+      go(`#/dashboard?tab=students&sorg=${encodeURIComponent(org)}`);
+    });
+  }
+
+  const clsSel = root.querySelector('#student-class');
+  if (clsSel && !clsSel.dataset.bound) {
+    clsSel.dataset.bound = '1';
+    clsSel.addEventListener('change', (ev) => {
+      const org = root.querySelector('#student-org')?.value || '';
+      const labelEl = root.querySelector('.filter-bar__label');
+      if (labelEl) {
+        labelEl.textContent = `${root.querySelector('#student-org')?.selectedOptions[0]?.text || ''} | ${ev.currentTarget.selectedOptions[0]?.text || ''}`;
+      }
+      go(`#/dashboard?tab=students&sorg=${encodeURIComponent(org)}&sclass=${encodeURIComponent(ev.currentTarget.value)}`);
+    });
+  }
+
+  const parentSel = root.querySelector('#parent-org');
+  if (parentSel && !parentSel.dataset.bound) {
+    parentSel.dataset.bound = '1';
+    parentSel.addEventListener('change', (ev) => go(`#/dashboard?tab=parents&porg=${encodeURIComponent(ev.currentTarget.value)}`));
+  }
+
+  const teacherSel = root.querySelector('#teacher-org');
+  if (teacherSel && !teacherSel.dataset.bound) {
+    teacherSel.dataset.bound = '1';
+    teacherSel.addEventListener('change', (ev) => go(`#/dashboard?tab=teachers&torg=${encodeURIComponent(ev.currentTarget.value)}`));
+  }
+
+  root.querySelectorAll('[data-open-parent]').forEach((btn) => {
+    if (btn.dataset.bound) return;
+    btn.dataset.bound = '1';
+    btn.addEventListener('click', () => openParentDetail(btn.dataset.openParent, ctx));
+  });
+
+  root.querySelectorAll('[data-open-teacher]').forEach((btn) => {
+    if (btn.dataset.bound) return;
+    btn.dataset.bound = '1';
+    btn.addEventListener('click', () => openTeacherDetail(btn.dataset.openTeacher, ctx));
+  });
+
+  root.querySelectorAll('[data-add-student]').forEach((btn) => {
+    if (btn.dataset.bound) return;
+    btn.dataset.bound = '1';
+    btn.addEventListener('click', () => openAddStudent(btn.dataset.addStudent, ctx));
+  });
+
+  root.querySelectorAll('[data-add-parent-to]').forEach((btn) => {
+    if (btn.dataset.bound) return;
+    btn.dataset.bound = '1';
+    btn.addEventListener('click', () => openAddParentForStudent(btn.dataset.addParentTo, ctx));
+  });
+}
+
 function bindAdmin(ctx, tab) {
   const root = document.getElementById('app');
+  bindListControls(root, ctx);
 
   root.querySelectorAll('[data-confirm]').forEach((btn) => {
     if (btn.closest('[data-preview]')) return;
