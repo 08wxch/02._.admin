@@ -4098,3 +4098,16 @@ button.chip:hover { background: var(--mint-strong); }
 .org-card--owner .org-card__stats { color: rgba(255, 255, 255, .7); border-color: rgba(255, 255, 255, .16); }
 .org-card__hint { font-size: 10.5px; color: var(--muted-2); }
 .org-card--owner .org-card__hint { color: rgba(255, 255, 255, .5); }
+
+/* ══ หน้าตั้งค่า 2 คอลัมน์ + CMS หน้าแรก ════════════════ */
+.settings-2col { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 18px; align-items: start; }
+@media (max-width: 1000px) { .settings-2col { grid-template-columns: 1fr; } }
+.cms-step {
+  display: flex; gap: 10px; align-items: flex-start;
+  padding: 10px; border: 1px solid var(--book-line); border-radius: 12px; background: #fbf9f4; margin-bottom: 8px;
+}
+.cms-step__no { font-size: 11px; color: var(--muted); min-width: 54px; padding-top: 8px; }
+.cms-step__fields { flex: 1; display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.cms-step__fields input, .cms-step__fields textarea { width: 100%; }
+.cms-step__actions { display: flex; flex-direction: column; gap: 4px; }
+.cms-step__actions .icon-btn { width: 28px; height: 28px; }

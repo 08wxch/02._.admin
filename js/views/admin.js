@@ -622,22 +622,66 @@ function studentsHtml(students, ctx, orgs, classMap = {}, scope = {}) {
 /* ── ตั้งค่า ─────────────────────────────────────────── */
 function settingsHtml(ctx) {
   const s = ctx.settings || {};
+  const steps = Array.isArray(s.home_steps) ? s.home_steps : [];
+  const titleLines = String(s.home_title || 'เรียนคณิตกับครูตัวต่อตัว|พร้อมเห็นพัฒนาการจริงทุกครั้งที่สอบ').split('|');
+  const subtitle = s.home_subtitle || 'เลือกคอร์สที่เหมาะกับน้อง จ่ายผ่านพร้อมเพย์ แล้วครูจะยืนยันที่นั่งให้ — หลังเรียน ผู้ปกครองดูคะแนนและข้อที่ผิดได้จากชุดข้อสอบจริงของ 02._.mock';
+
+  const stepRow = (step, i) => `
+    <div class="cms-step" data-step="${i}">
+      <div class="cms-step__no">ขั้นที่ ${i + 1}</div>
+      <div class="cms-step__fields">
+        <input class="cms-step__title" value="${e(step.title || '')}" placeholder="หัวข้อขั้นตอน เช่น เลือกคอร์ส">
+        <textarea class="cms-step__text" rows="2" placeholder="คำอธิบายสั้น ๆ">${e(step.text || '')}</textarea>
+      </div>
+      <div class="cms-step__actions">
+        <button class="icon-btn" type="button" data-step-up title="เลื่อนขึ้น">↑</button>
+        <button class="icon-btn" type="button" data-step-down title="เลื่อนลง">↓</button>
+        <button class="icon-btn" type="button" data-step-remove title="ลบขั้นตอนนี้" style="color:var(--red)">✕</button>
+      </div>
+    </div>`;
+
   return `
-  <div class="book-card" style="max-width:620px">
-    <div style="font-family:var(--brand-font);font-size:16px;margin-bottom:10px">ตั้งค่าการรับเงิน</div>
-    <div class="field-row"><label>ประเภทพร้อมเพย์</label>
-      <select id="s-type">
-        <option value="phone" ${s.promptpay_type === 'phone' ? 'selected' : ''}>เบอร์โทร</option>
-        <option value="national_id" ${s.promptpay_type === 'national_id' ? 'selected' : ''}>เลขบัตรประชาชน</option>
-        <option value="ewallet" ${s.promptpay_type === 'ewallet' ? 'selected' : ''}>e-Wallet</option>
-      </select></div>
-    <div class="field-row"><label>เลขพร้อมเพย์</label><input id="s-id" value="${e(s.promptpay_id || '')}" placeholder="0617806696"></div>
-    <div class="field-row"><label>ชื่อบัญชี</label><input id="s-name" value="${e(s.promptpay_name || '')}"></div>
-    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
-      <div class="field-row"><label>Line ที่ให้ติดต่อ</label><input id="s-line" value="${e(s.contact_line || '')}"></div>
-      <div class="field-row"><label>เบอร์โทรติดต่อ</label><input id="s-phone" value="${e(s.contact_phone || '')}"></div>
+  <div class="settings-2col">
+    <div class="book-card">
+      <div style="font-family:var(--brand-font);font-size:16px;margin-bottom:10px">ตั้งค่าพร้อมเพย์</div>
+      <div class="field-row"><label>ประเภทพร้อมเพย์</label>
+        <select id="s-type">
+          <option value="phone" ${s.promptpay_type === 'phone' ? 'selected' : ''}>เบอร์โทร</option>
+          <option value="national_id" ${s.promptpay_type === 'national_id' ? 'selected' : ''}>เลขบัตรประชาชน</option>
+          <option value="ewallet" ${s.promptpay_type === 'ewallet' ? 'selected' : ''}>e-Wallet</option>
+        </select></div>
+      <div class="field-row"><label>เลขพร้อมเพย์</label><input id="s-id" value="${e(s.promptpay_id || '')}" placeholder="0617806696"></div>
+      <div class="field-row"><label>ชื่อบัญชี</label><input id="s-name" value="${e(s.promptpay_name || '')}"></div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+        <div class="field-row"><label>Line ที่ให้ติดต่อ</label><input id="s-line" value="${e(s.contact_line || '')}"></div>
+        <div class="field-row"><label>เบอร์โทรติดต่อ</label><input id="s-phone" value="${e(s.contact_phone || '')}"></div>
+      </div>
+      <button class="btn btn-primary" id="s-save">บันทึกการตั้งค่า</button>
     </div>
-    <button class="btn btn-primary" id="s-save">บันทึกการตั้งค่า</button>
+
+    <div class="book-card">
+      <div style="font-family:var(--brand-font);font-size:16px;margin-bottom:10px">แก้ข้อความหน้าแรก (02._.book)</div>
+
+      <div class="field-row">
+        <label>หัวข้อใหญ่</label>
+        <input id="s-home-line1" value="${e(titleLines[0] || '')}" placeholder="บรรทัดที่ 1">
+        <input id="s-home-line2" value="${e(titleLines[1] || '')}" placeholder="บรรทัดที่ 2 (เว้นว่างได้)" style="margin-top:8px">
+        <span class="hint">แตะ Enter ในช่องเพื่อขึ้นบรรทัดใหม่ไม่ได้ — ใส่ 2 บรรทัดได้จากช่องนี้</span>
+      </div>
+
+      <div class="field-row">
+        <label>คำโปรยใต้หัวข้อ</label>
+        <textarea id="s-home-sub" rows="4">${e(subtitle)}</textarea>
+      </div>
+
+      <div class="field-row">
+        <label>ขั้นตอนการจอง</label>
+        <div id="s-steps">${steps.map((st, i) => stepRow(st, i)).join('')}</div>
+        <button class="btn btn-ghost btn-sm" type="button" id="s-step-add" style="margin-top:8px">+ เพิ่มขั้นตอน</button>
+      </div>
+
+      <button class="btn btn-primary" id="s-home-save">บันทึกข้อความหน้าแรก</button>
+    </div>
   </div>`;
 }
 
@@ -706,6 +750,78 @@ function bindCourseLivePreview(root, ctx) {
   render();
   const card = preview.querySelector('.course-card');
   if (card) { card.removeAttribute('href'); card.style.cursor = 'default'; }
+}
+
+
+/** หน้าตั้งค่า: ขั้นตอนการจอง (เพิ่ม/ลบ/สลับ/แก้) + บันทึกข้อความหน้าแรก */
+function bindHomeCms(root, ctx) {
+  const wrap = root.querySelector('#s-steps');
+  if (!wrap || wrap.dataset.bound) return;
+  wrap.dataset.bound = '1';
+
+  const renumber = () => {
+    [...wrap.querySelectorAll('.cms-step')].forEach((row, i) => {
+      row.dataset.step = String(i);
+      const no = row.querySelector('.cms-step__no');
+      if (no) no.textContent = `ขั้นที่ ${i + 1}`;
+    });
+  };
+
+  const stepHtml = (title = '', text = '') => `
+    <div class="cms-step">
+      <div class="cms-step__no">ขั้นที่ 0</div>
+      <div class="cms-step__fields">
+        <input class="cms-step__title" value="" placeholder="หัวข้อขั้นตอน">
+        <textarea class="cms-step__text" rows="2" placeholder="คำอธิบายสั้น ๆ"></textarea>
+      </div>
+      <div class="cms-step__actions">
+        <button class="icon-btn" type="button" data-step-up title="เลื่อนขึ้น">↑</button>
+        <button class="icon-btn" type="button" data-step-down title="เลื่อนลง">↓</button>
+        <button class="icon-btn" type="button" data-step-remove title="ลบขั้นตอนนี้" style="color:var(--red)">✕</button>
+      </div>
+    </div>`;
+
+  root.querySelector('#s-step-add')?.addEventListener('click', () => {
+    wrap.insertAdjacentHTML('beforeend', stepHtml());
+    renumber();
+  });
+
+  wrap.addEventListener('click', (ev) => {
+    const row = ev.target.closest('.cms-step');
+    if (!row) return;
+    if (ev.target.closest('[data-step-remove]')) {
+      if (wrap.querySelectorAll('.cms-step').length <= 1) { toast('ต้องมีอย่างน้อย 1 ขั้นตอน', 'error'); return; }
+      row.remove(); renumber();
+    } else if (ev.target.closest('[data-step-up]')) {
+      const prev = row.previousElementSibling;
+      if (prev) { wrap.insertBefore(row, prev); renumber(); }
+    } else if (ev.target.closest('[data-step-down]')) {
+      const next = row.nextElementSibling;
+      if (next) { wrap.insertBefore(next, row); renumber(); }
+    }
+  });
+
+  root.querySelector('#s-home-save')?.addEventListener('click', async (ev) => {
+    const btn = ev.currentTarget;
+    btn.disabled = true;
+    try {
+      const line1 = root.querySelector('#s-home-line1').value.trim();
+      const line2 = root.querySelector('#s-home-line2').value.trim();
+      const steps = [...wrap.querySelectorAll('.cms-step')].map((row) => ({
+        title: row.querySelector('.cms-step__title').value.trim(),
+        text: row.querySelector('.cms-step__text').value.trim(),
+      })).filter((st) => st.title || st.text);
+
+      await ctx.data.saveSettings({
+        home_title: [line1, line2].filter(Boolean).join('|'),
+        home_subtitle: root.querySelector('#s-home-sub').value.trim(),
+        home_steps: steps,
+      });
+      toast('บันทึกข้อความหน้าแรกแล้ว', 'success');
+      ctx.settings = { ...(ctx.settings || {}), home_title: [line1, line2].join('|'), home_steps: steps };
+    } catch (err) { toast(err.message || 'บันทึกไม่สำเร็จ', 'error'); }
+    finally { btn.disabled = false; }
+  });
 }
 
 function bindListControls(root, ctx) {
@@ -992,6 +1108,7 @@ function bindAdmin(ctx, tab) {
   const root = document.getElementById('app');
   bindListControls(root, ctx);
   bindCourseLivePreview(root, ctx);
+  bindHomeCms(root, ctx);
 
   root.querySelectorAll('[data-confirm]').forEach((btn) => {
     if (btn.closest('[data-preview]')) return;
@@ -1346,7 +1463,8 @@ function bindAdmin(ctx, tab) {
 
   // ตั้งค่า
   root.querySelector('#s-save')?.addEventListener('click', async (ev) => {
-    ev.currentTarget.disabled = true;
+    const btn = ev.currentTarget;
+    btn.disabled = true;
     try {
       await ctx.data.saveSettings({
         promptpay_type: root.querySelector('#s-type').value,
@@ -1357,6 +1475,6 @@ function bindAdmin(ctx, tab) {
       });
       toast('บันทึกการตั้งค่าแล้ว', 'success');
     } catch (err) { toast(err.message || 'บันทึกไม่สำเร็จ', 'error'); }
-    finally { ev.currentTarget.disabled = false; }
+    finally { btn.disabled = false; }
   });
 }
