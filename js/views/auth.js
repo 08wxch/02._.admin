@@ -1,4 +1,6 @@
 /* ── ล็อกอินครู/เจ้าของ (ใช้บัญชีเดียวกับ 02._.mock) ──────── */
+import { closeModal, openModal, toast } from '../ui.js';
+
 export async function renderTeacherAuth(_arg, ctx) {
   if (ctx.me) { location.hash = '#/dashboard'; return ''; }
 
@@ -7,7 +9,7 @@ export async function renderTeacherAuth(_arg, ctx) {
     <div class="login-main">
       <div class="login-main__inner">
         <div class="login-card">
-          <span class="login-eyebrow">สำหรับครูและเจ้าของระบบ</span>
+          <span class="login-eyebrow">ระบบจัดการสำหรับครูและบุคลากร</span>
           <h2>เข้าสู่ระบบ</h2>
           <p class="login-lead">ใช้บัญชีเดียวกับระบบ <strong>02._.mock</strong></p>
 
@@ -19,7 +21,7 @@ export async function renderTeacherAuth(_arg, ctx) {
               <div class="input-wrap">
                 <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
                 <input class="input input--lg" id="t-code" type="text" autocomplete="username"
-                  placeholder="เช่น 02._.math หรือ Wich Pitchon">
+                  placeholder="รหัสครู หรือ ชื่อ-นามสกุล">
               </div>
             </div>
 
