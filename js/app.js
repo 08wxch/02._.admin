@@ -181,8 +181,10 @@ export function openProfile() {
 
       <div style="border-top:1px solid var(--book-line);margin-top:16px;padding-top:14px">
         <div style="font-family:var(--brand-font);font-size:15px;margin-bottom:8px">เปลี่ยนรหัสผ่าน</div>
+        <div class="field-row"><label>รหัสผ่านปัจจุบัน</label>
+          <input id="pf-pass-current" type="password" autocomplete="current-password" placeholder="ยืนยันก่อนเปลี่ยน"></div>
         <div class="field-row"><label>รหัสผ่านใหม่</label>
-          <input id="pf-pass" type="password" autocomplete="new-password" placeholder="อย่างน้อย 6 ตัวอักษร"></div>
+          <input id="pf-pass" type="password" autocomplete="new-password" placeholder="อย่างน้อย 8 ตัว มีตัวอักษรและตัวเลข"></div>
         <div class="field-row"><label>ยืนยันรหัสผ่านใหม่</label>
           <input id="pf-pass2" type="password" autocomplete="new-password" placeholder="พิมพ์ซ้ำ"></div>
         <button class="btn btn-primary btn-block btn-sm" id="pf-pass-save">เปลี่ยนรหัสผ่าน</button>
@@ -207,11 +209,14 @@ export function openProfile() {
       root.querySelector('#pf-pass-save')?.addEventListener('click', async (ev) => {
         const p1 = root.querySelector('#pf-pass').value;
         const p2 = root.querySelector('#pf-pass2').value;
-        if (p1.length < 6) { toast('รหัสผ่านอย่างน้อย 6 ตัวอักษร', 'error'); return; }
+        const current = root.querySelector('#pf-pass-current').value;
+        if (p1.length < 8) { toast('รหัสผ่านอย่างน้อย 8 ตัวอักษร', 'error'); return; }
+        if (!/[A-Za-z]/.test(p1) || !/[0-9]/.test(p1)) { toast('รหัสผ่านต้องมีทั้งตัวอักษรและตัวเลข', 'error'); return; }
         if (p1 !== p2) { toast('รหัสผ่านทั้งสองช่องไม่ตรงกัน', 'error'); return; }
+        if (!current) { toast('กรุณากรอกรหัสผ่านปัจจุบัน', 'error'); return; }
         ev.currentTarget.disabled = true;
         try {
-          await data.changeTeacherPassword(p1);
+          await data.changeTeacherPassword(p1, current);
           toast('เปลี่ยนรหัสผ่านแล้ว (ใช้กับ 02._.mock ด้วย)', 'success');
         } catch (err) { toast(err.message || 'ไม่สำเร็จ', 'error'); }
         finally { ev.currentTarget.disabled = false; }

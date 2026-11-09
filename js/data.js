@@ -109,13 +109,26 @@ export async function signInTeacher(code, password) {
   const pass = String(password || '');
   if (!clean) throw new Error('กรุณากรอกรหัสครู');
   const { data: res, error } = await sb().rpc('bk_teacher_login', { p_code: clean, p_password: pass });
-  if (error) throw new Error(error.message || 'เข้าสู่ระบบไม่สำเร็จ');
+  if (error) {
+    const msg = String(error.message || '');
+    if (/ไม่พบรหัสครูนี้/.test(msg)) {
+      throw new Error('ไม่พบรหัสครูนี้ · รหัสอาจถูกเปลี่ยนใน 02._.mock แล้ว ให้ใช้รหัสล่าสุดที่แสดงในหน้า “ครูและบุคลากร”');
+    }
+    if (/รหัสผ่านไม่ถูกต้อง/.test(msg)) {
+      throw new Error('รหัสผ่านไม่ถูกต้อง · 02._.admin ใช้รหัสผ่านชุดเดียวกับ 02._.mock');
+    }
+    throw new Error(msg || 'เข้าสู่ระบบไม่สำเร็จ');
+  }
   const email = res?.email;
   if (!email) throw new Error('ไม่พบบัญชีครูนี้');
   const sign = await sb().auth.signInWithPassword({ email, password: pass });
   if (sign.error) throw new Error(sign.error.message || 'เข้าสู่ระบบไม่สำเร็จ');
   session = sign.data.session;
   await loadAccount();
+  if (account && res?.code && account.teacher_code !== res.code) {
+    await sb().from('bk_accounts').update({ teacher_code: res.code, org_id: res.orgId || account.org_id, updated_at: new Date().toISOString() }).eq('user_id', session.user.id);
+    await loadAccount();
+  }
   notify();
   return account;
 }
@@ -131,10 +144,19 @@ export async function changePassword(newPassword) {
   return true;
 }
 
-/** ครู/เจ้าของ เปลี่ยนรหัสของตัวเอง — อัปเดตทั้ง Supabase และ credentials ใน 02._.mock */
-export async function changeTeacherPassword(newPassword) {
+/** ครู/เจ้าของ เปลี่ยนรหัสของตัวเอง — ต้องยืนยันรหัสเดิม และบันทึกcredentials ให้ 02._.mock */
+export async function changeTeacherPassword(newPassword, currentPassword) {
   const pass = String(newPassword || '');
-  if (pass.length < 6) throw new Error('รหัสผ่านต้องมีอย่างน้อย 6 ตัวอักษร');
+  const current = String(currentPassword || '');
+  if (pass.length < 8) throw new Error('รหัสผ่านต้องมีอย่างน้อย 8 ตัวอักษร');
+  if (!/[A-Za-z]/.test(pass) || !/[0-9]/.test(pass)) throw new Error('รหัสผ่านต้องมีทั้งตัวอักษรและตัวเลข');
+  if (pass === current) throw new Error('รหัสผ่านใหม่ต้องไม่ซ้ำกับรหัสเดิม');
+  if (!current) throw new Error('กรุณากรอกรหัสผ่านปัจจุบัน');
+  const email = session?.user?.email;
+  if (!email) throw new Error('ไม่พบเซสชัน กรุณาเข้าสู่ระบบใหม่');
+  const verify = await sb().auth.signInWithPassword({ email, password: current });
+  if (verify.error) throw new Error('รหัสผ่านปัจจุบันไม่ถูกต้อง');
+  session = verify.data.session;
   const { data: res, error } = await sb().rpc('bk_set_teacher_password', { p_password: pass });
   if (error) throw new Error(error.message || 'เปลี่ยนรหัสผ่านไม่สำเร็จ');
   const { error: e2 } = await sb().auth.updateUser({ password: pass });

@@ -940,7 +940,10 @@ create or replace function public.bk_set_parent_password(p_user uuid, p_password
 returns jsonb language plpgsql security definer set search_path = public, auth, extensions as $$
 begin
   if not (public.bk_is_owner() or public.bk_is_teacher()) then raise exception 'ไม่มีสิทธิ์'; end if;
-  if length(coalesce(p_password,'')) < 6 then raise exception 'รหัสผ่านต้องมีอย่างน้อย 6 ตัวอักษร'; end if;
+  if length(coalesce(p_password,'')) < 8 then raise exception 'รหัสผ่านต้องมีอย่างน้อย 8 ตัวอักษร'; end if;
+  if p_password !~ '[A-Za-z]' or p_password !~ '[0-9]' then
+    raise exception 'รหัสผ่านต้องมีทั้งตัวอักษรและตัวเลข';
+  end if;
   if public.bk_is_teacher() and not public.bk_parent_in_my_org(p_user) then
     raise exception 'ผู้ปกครองคนนี้ไม่ได้อยู่ในหน่วยงานของคุณ';
   end if;
@@ -1155,7 +1158,8 @@ returns jsonb language plpgsql security definer set search_path = public, auth, 
 declare v_code text;
 begin
   if not (public.bk_is_owner() or public.bk_is_teacher()) then raise exception 'ไม่มีสิทธิ์'; end if;
-  if length(coalesce(p_password,'')) < 6 then raise exception 'รหัสผ่านต้องมีอย่างน้อย 6 ตัวอักษร'; end if;
+  if length(coalesce(p_password,'')) < 8 then raise exception 'รหัสผ่านต้องมีอย่างน้อย 8 ตัวอักษร'; end if;
+  if p_password !~ '[A-Za-z]' or p_password !~ '[0-9]' then raise exception 'รหัสผ่านต้องมีทั้งตัวอักษรและตัวเลข'; end if;
 
   select teacher_code into v_code from public.bk_accounts where user_id = auth.uid();
   update auth.users set encrypted_password = crypt(p_password, gen_salt('bf')), updated_at = now()
@@ -1262,7 +1266,7 @@ begin
     role = case when v_role = 'owner' then 'owner' else public.bk_accounts.role end,
     updated_at = now();
 
-  return jsonb_build_object('ok', true, 'email', v_email, 'role', v_role, 'name', coalesce(v_t->>'name',''));
+  return jsonb_build_object('ok', true, 'email', v_email, 'role', v_role, 'name', coalesce(v_t->>'name',''), 'code', v_code, 'orgId', coalesce(v_t->>'orgId',''));
 end;
 $$;
 
@@ -1295,6 +1299,7 @@ end;
 $$;
 
 grant execute on function public.bk_teacher_detail(text) to authenticated;
+
 
 -- หน่วยงาน + ชื่อ class (สำหรับตัวกรองนักเรียน 2 ขั้น)
 create or replace function public.bk_class_names()
