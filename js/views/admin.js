@@ -165,8 +165,9 @@ function ordersHtml(orders, ctx) {
 function coursesHtml(courses, editId, ctx, categories = []) {
   const isOwner = ctx.me?.role === 'owner';
   const editing = courses.find((c) => c.id === editId);
-  const newCatId = ctx.route?.query.get('new') === '1' ? (ctx.route?.query.get('cat') || '') : '';
-  const open = Boolean(editing) || Boolean(newCatId);
+  const isNew = ctx.route?.query.get('new') === '1';
+  const newCatId = isNew ? (ctx.route?.query.get('cat') || '') : '';
+  const open = Boolean(editing) || isNew;
 
   const grouped = categories.map((cat) => ({
     cat,
@@ -643,6 +644,70 @@ function settingsHtml(ctx) {
 /* ── events ──────────────────────────────────────────── */
 
 /** ผูกตัวกรอง (หน่วยงาน/class) + ปุ่ม + ในรายการ — กันผูกซ้ำ */
+
+/** พรีวิวคอร์สแบบเรียลไทม์: พิมพ์/อัปโหลดรูปแล้วเห็นทันทีในฝั่งซ้าย */
+function bindCourseLivePreview(root, ctx) {
+  const form = root.querySelector('#c-save')?.closest('.course-editor__form');
+  const preview = root.querySelector('.course-editor__preview');
+  if (!form || !preview || form.dataset.previewBound) return;
+  form.dataset.previewBound = '1';
+
+  const get = (sel) => root.querySelector(sel);
+  let imageUrl = get('#c-img-preview img')?.getAttribute('src') || '';
+
+  const render = () => {
+    const seatsRaw = get('#c-unlimited')?.checked ? 0 : Number(get('#c-seats')?.value || 0);
+    const draft = {
+      id: get('#c-id')?.value || '',
+      title: get('#c-title')?.value || '',
+      subtitle: get('#c-sub')?.value || '',
+      level: get('#c-level')?.value || '',
+      subject: 'คณิตศาสตร์',
+      price: Number(get('#c-price')?.value || 0),
+      seats: seatsRaw,
+      left: seatsRaw || null,
+      image_url: imageUrl,
+    };
+    const old = preview.querySelector('.course-card');
+    const html = ctx.courseCardForAdmin(draft);
+    if (old) {
+      const tmp = document.createElement('div');
+      tmp.innerHTML = html;
+      old.replaceWith(tmp.firstElementChild);
+      // การ์ดพรีวิวไม่ต้องพาไปหน้าอื่น
+      const card = preview.querySelector('.course-card');
+      if (card) { card.removeAttribute('href'); card.style.cursor = 'default'; }
+    }
+  };
+
+  ['#c-title', '#c-sub', '#c-level', '#c-price', '#c-seats', '#c-detail'].forEach((sel) => {
+    get(sel)?.addEventListener('input', render);
+  });
+  get('#c-unlimited')?.addEventListener('change', () => {
+    const seats = get('#c-seats');
+    if (seats) seats.disabled = Boolean(get('#c-unlimited').checked);
+    render();
+  });
+
+  // อัปโหลดรูป → แสดงในพรีวิวทันที (ก่อนกดบันทึก)
+  get('#c-img-file')?.addEventListener('change', (ev) => {
+    const file = ev.currentTarget.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = () => {
+      imageUrl = String(reader.result || '');
+      const box = get('#c-img-preview');
+      if (box) box.innerHTML = `<img src="${imageUrl}" class="coupon-img-preview" alt="">`;
+      render();
+    };
+    reader.readAsDataURL(file);
+  });
+
+  render();
+  const card = preview.querySelector('.course-card');
+  if (card) { card.removeAttribute('href'); card.style.cursor = 'default'; }
+}
+
 function bindListControls(root, ctx) {
   const go = (hash) => { location.hash = hash; window.dispatchEvent(new HashChangeEvent('hashchange')); };
 
@@ -926,6 +991,7 @@ function bindCouponForm(root, ctx) {
 function bindAdmin(ctx, tab) {
   const root = document.getElementById('app');
   bindListControls(root, ctx);
+  bindCourseLivePreview(root, ctx);
 
   root.querySelectorAll('[data-confirm]').forEach((btn) => {
     if (btn.closest('[data-preview]')) return;
