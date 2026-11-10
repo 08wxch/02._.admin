@@ -355,8 +355,10 @@ export async function saveCoupon(patch) {
     value: Number(patch.value || 0),
     course_ids: Array.isArray(patch.course_ids) ? patch.course_ids : [],
     min_amount: Number(patch.min_amount || 0),
-    max_uses: Number(patch.max_uses || 0),
-    max_per_user: Number(patch.max_per_user || 1),
+    max_uses: Math.max(0, Math.round(Number(patch.max_uses || 0))),
+    max_per_user: patch.max_per_user === undefined || patch.max_per_user === null
+      ? 1
+      : Math.max(0, Math.round(Number(patch.max_per_user))),
     active: patch.active !== false,
     note: String(patch.note || ''),
     expires_at: patch.expires_at || null,

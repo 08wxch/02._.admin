@@ -385,12 +385,13 @@ function couponsHtml(coupons, courses, editId, ctx) {
       </div>
 
       <div class="field-row">
-        <label>จำนวนครั้งที่ใช้ได้</label>
+        <label>จำนวนสิทธิ์รวม (ทุกคน)</label>
         <label class="check-line" style="margin:0">
           <input type="checkbox" id="cp-limited" ${limited ? 'checked' : ''}>
-          <span>จำกัดจำนวนครั้ง</span>
+          <span>จำกัดจำนวนสิทธิ์รวม</span>
         </label>
         <input id="cp-max" type="number" min="1" value="${maxUses}" ${limited ? '' : 'disabled'}>
+        <span class="hint">ไม่ติ๊ก = ไม่จำกัดจำนวนสิทธิ์รวม (คนละตัวกับ "ครั้งต่อคน")</span>
       </div>
 
       <div class="field-row">
@@ -1104,44 +1105,64 @@ function bindCouponForm(root, ctx) {
     if (!limited.checked) max.value = '';
     else if (!max.value) max.value = '1';
   };
-  const syncPreview = () => {
-    if (!previewBox || !ctx.couponCardForAdmin) return;
-    const courseIds = [...(coursesSel?.selectedOptions || [])].map((o) => o.value);
-    const draft = {
-      kind: isPercent?.checked ? 'percent' : 'amount',
-      value: Number(value?.value || 0),
-      title: title?.value || '',
-      code: (code?.value || '').toUpperCase() || 'CODE',
-      course_ids: courseIds,
-      min_amount: Number(form.querySelector('#cp-min')?.value || 0),
-      max_per_user: perUnlimited?.checked ? 0 : Number(perInput?.value || 1),
-      expires_at: form.querySelector('#cp-exp')?.value || null,
-    };
-    const old = previewBox.querySelector('.coupon-card');
-    const html = ctx.couponCardForAdmin(draft, ctx._courses || []);
-    if (old) { const tmp = document.createElement('div'); tmp.innerHTML = html; old.replaceWith(tmp.firstElementChild); }
-  };
-
   const perUnlimited = form.querySelector('#cp-peruser-unlimited');
   const perInput = form.querySelector('#cp-peruser');
+  const expInput = form.querySelector('#cp-exp');
+  const minInput = form.querySelector('#cp-min');
+
   const syncPerUser = () => {
     if (!perUnlimited || !perInput) return;
     perInput.disabled = perUnlimited.checked;
     if (perUnlimited.checked) perInput.value = '';
     else if (!perInput.value) perInput.value = '1';
   };
-  perUnlimited?.addEventListener('change', syncPerUser);
-  syncPerUser();
 
-  isPercent?.addEventListener('change', () => { syncUnit(); syncPreview(); });
-  limited?.addEventListener('change', () => { syncLimited(); });
-  value?.addEventListener('input', syncPreview);
-  title?.addEventListener('input', syncPreview);
-  code?.addEventListener('input', syncPreview);
-  coursesSel?.addEventListener('change', syncPreview);
-  perInput?.addEventListener('input', syncPreview);
-  form.querySelector('#cp-exp')?.addEventListener('change', syncPreview);
-  syncUnit(); syncLimited();
+  const draftOf = () => {
+    const courseIds = [...(coursesSel?.selectedOptions || [])].map((o) => o.value);
+    return {
+      kind: isPercent?.checked ? 'percent' : 'amount',
+      value: Number(value?.value || 0),
+      title: title?.value || '',
+      code: (code?.value || '').toUpperCase() || 'CODE',
+      course_ids: courseIds,
+      min_amount: Number(minInput?.value || 0),
+      max_per_user: perUnlimited?.checked ? 0 : Number(perInput?.value || 1),
+      expires_at: expInput?.value || null,
+      image_url: form.querySelector('#cp-img-preview img')?.getAttribute('src') || '',
+    };
+  };
+
+  // วาดพรีวิวใหม่ด้วยข้อมูลปัจจุบัน (ใช้การ์ดตัวเดียวกับที่ผู้ปกครองเห็น)
+  const renderPreview = () => {
+    if (!previewBox || !ctx.couponCardForAdmin) return;
+    const html = ctx.couponCardForAdmin(draftOf(), ctx._courses || []);
+    const tmp = document.createElement('div');
+    tmp.innerHTML = html;
+    const fresh = tmp.firstElementChild;
+    const old = previewBox.querySelector('.coupon-card');
+    if (old) old.replaceWith(fresh);
+    else previewBox.insertAdjacentHTML('afterbegin', html);
+  };
+
+  isPercent?.addEventListener('change', () => { syncUnit(); renderPreview(); });
+  limited?.addEventListener('change', () => { syncLimited(); renderPreview(); });
+  [value, title, code, minInput, perInput, expInput].forEach((el) => {
+    if (!el) return;
+    el.addEventListener('input', renderPreview);
+    el.addEventListener('change', renderPreview);
+  });
+  perUnlimited?.addEventListener('change', () => {
+    syncPerUser();
+    // ใช้ไม่จำกัดต่อคน → ปลดลิมิตรวมให้ด้วย เพื่อไม่ให้ติด "สิทธิ์รวม 1 ครั้ง"
+    if (perUnlimited.checked && limited) {
+      limited.checked = false;
+      syncLimited();
+    }
+    renderPreview();
+  });
+  coursesSel?.addEventListener('change', renderPreview);
+
+  syncUnit(); syncLimited(); syncPerUser(); renderPreview();
 
   // บันทึก
   form.querySelector('#cp-save')?.addEventListener('click', async () => {
