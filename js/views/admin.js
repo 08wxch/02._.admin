@@ -314,29 +314,17 @@ function couponsHtml(coupons, courses, editId, ctx) {
     </div>
     ${coupons.length ? `<div class="coupon-grid-admin">
       ${coupons.map((c) => `
-        <article class="coupon-card ${c.image_url ? 'has-image' : ''} ${c.active ? '' : 'is-off'}">
-          ${c.image_url
-            ? `<img class="coupon-card__img" src="${e(c.image_url)}" alt="${e(c.title || c.code)}">
-               <div class="coupon-card__state">${c.active ? '<span class="chip chip--ok">เปิดใช้</span>' : '<span class="chip chip--mute">ปิด</span>'}</div>`
-            : `<div class="coupon-card__body">
-                 <div class="coupon-card__value">${c.kind === 'percent' ? `${e(String(c.value))}%` : ctx.baht(c.value)}</div>
-                 <div class="coupon-card__text">
-                   <div class="coupon-card__title">${e(c.title || c.code)}</div>
-                   <div class="tiny dim">${e(scopeText(c))}</div>
-                   ${c.min_amount ? `<div class="tiny dim">ยอดขั้นต่ำ ${ctx.baht(c.min_amount)}</div>` : ''}
-                   <div class="tiny dim">${c.max_uses ? `ใช้ได้ ${c.used || 0}/${c.max_uses} ครั้ง` : `ใช้ไม่จำกัด · ใช้แล้ว ${c.used || 0}`}</div>
-                   <div class="tiny dim">${c.expires_at ? `ใช้ได้ถึง ${e(thaiDate(c.expires_at))}` : 'ไม่มีวันหมดอายุ'}</div>
-                 </div>
-                 <div class="coupon-card__right">${c.active ? '<span class="chip chip--ok">เปิด</span>' : '<span class="chip chip--mute">ปิด</span>'}</div>
-               </div>`}
+        <div class="coupon-wrap">
+          ${ctx.couponCardForAdmin(c, courses)}
           <div class="coupon-card__admin">
             <span class="coupon-card__code">${e(c.code)}</span>
-            <span style="display:flex;gap:6px">
+            <span class="tiny dim">${c.max_uses ? `ใช้แล้ว ${c.use_count || 0}/${c.max_uses}` : `ใช้แล้ว ${c.use_count || 0} · ไม่จำกัดสิทธิ์รวม`}</span>
+            <span style="display:flex;gap:6px;margin-left:auto">
               <a class="btn btn-ghost btn-sm" href="#/dashboard?tab=coupons&edit=${c.id}">แก้ไข</a>
               <button class="btn btn-ghost btn-sm" data-del-coupon="${c.id}" style="color:var(--red)">ลบ</button>
             </span>
           </div>
-        </article>`).join('')}
+        </div>`).join('')}
     </div>` : `<div class="book-card" style="padding:26px;text-align:center">
         <b>ยังไม่มีคูปอง</b>
         <p class="tiny dim" style="margin:6px 0 14px">สร้างคูปองใบแรก แล้วผู้ปกครองจะเห็นในหน้าบัตรส่วนลดของ 02._.book</p>
@@ -381,6 +369,20 @@ function couponsHtml(coupons, courses, editId, ctx) {
 
       <div class="field-row"><label>ยอดขั้นต่ำ (บาท)</label>
         <input id="cp-min" type="number" min="0" value="${Number(editing?.min_amount || 0)}"></div>
+
+      <div class="field-row">
+        <label>ใช้ได้กี่ครั้งต่อคน</label>
+        <div class="unit-row">
+          <label class="check-line" style="margin:0">
+            <input type="checkbox" id="cp-peruser-unlimited" ${Number(editing?.max_per_user ?? 1) > 0 ? '' : 'checked'}>
+            <span>ไม่จำกัดครั้งต่อคน</span>
+          </label>
+          <input id="cp-peruser" type="number" min="1" value="${Number(editing?.max_per_user || 1) || 1}"
+            ${Number(editing?.max_per_user ?? 1) > 0 ? '' : 'disabled'}>
+          <span class="unit-suffix">ครั้ง/คน</span>
+        </div>
+        <span class="hint">เช่น ใส่ 3 = ผู้ปกครองคนเดิมใช้โค้ดนี้ได้ 3 ครั้ง</span>
+      </div>
 
       <div class="field-row">
         <label>จำนวนครั้งที่ใช้ได้</label>
@@ -1111,12 +1113,25 @@ function bindCouponForm(root, ctx) {
       title: title?.value || '',
       code: (code?.value || '').toUpperCase() || 'CODE',
       course_ids: courseIds,
-      min_amount: 0,
+      min_amount: Number(form.querySelector('#cp-min')?.value || 0),
+      max_per_user: perUnlimited?.checked ? 0 : Number(perInput?.value || 1),
+      expires_at: form.querySelector('#cp-exp')?.value || null,
     };
     const old = previewBox.querySelector('.coupon-card');
     const html = ctx.couponCardForAdmin(draft, ctx._courses || []);
     if (old) { const tmp = document.createElement('div'); tmp.innerHTML = html; old.replaceWith(tmp.firstElementChild); }
   };
+
+  const perUnlimited = form.querySelector('#cp-peruser-unlimited');
+  const perInput = form.querySelector('#cp-peruser');
+  const syncPerUser = () => {
+    if (!perUnlimited || !perInput) return;
+    perInput.disabled = perUnlimited.checked;
+    if (perUnlimited.checked) perInput.value = '';
+    else if (!perInput.value) perInput.value = '1';
+  };
+  perUnlimited?.addEventListener('change', syncPerUser);
+  syncPerUser();
 
   isPercent?.addEventListener('change', () => { syncUnit(); syncPreview(); });
   limited?.addEventListener('change', () => { syncLimited(); });
@@ -1124,6 +1139,8 @@ function bindCouponForm(root, ctx) {
   title?.addEventListener('input', syncPreview);
   code?.addEventListener('input', syncPreview);
   coursesSel?.addEventListener('change', syncPreview);
+  perInput?.addEventListener('input', syncPreview);
+  form.querySelector('#cp-exp')?.addEventListener('change', syncPreview);
   syncUnit(); syncLimited();
 
   // บันทึก
@@ -1137,6 +1154,9 @@ function bindCouponForm(root, ctx) {
       value: Number(value?.value || 0),
       min_amount: Number(form.querySelector('#cp-min')?.value || 0),
       max_uses: limited?.checked ? Math.max(1, Number(max?.value || 1)) : 0,
+      max_per_user: form.querySelector('#cp-peruser-unlimited')?.checked
+        ? 0
+        : Math.max(1, Number(form.querySelector('#cp-peruser')?.value || 1)),
       course_ids: courseIds,
       note: form.querySelector('#cp-note')?.value.trim() || '',
       expires_at: form.querySelector('#cp-exp')?.value || null,
@@ -1482,35 +1502,6 @@ function bindAdmin(ctx, tab) {
     toast('จะลบรูปเมื่อกดบันทึก', 'success');
   });
 
-  root.querySelector('#cp-save')?.addEventListener('click', async (ev) => {
-    const btn = ev.currentTarget;
-    const sel = root.querySelector('#cp-courses');
-    btn.disabled = true;
-    try {
-      const file = root.querySelector('#cp-image')?.files?.[0];
-      let image_url = root.querySelector('#cp-img-remove')?.dataset.removed === '1' ? '' : undefined;
-      if (file) image_url = await ctx.data.uploadCouponImage(file);
-      await ctx.data.saveCoupon({
-        id: root.querySelector('#cp-id').value || undefined,
-        code: root.querySelector('#cp-code').value,
-        title: root.querySelector('#cp-title').value,
-        kind: root.querySelector('#cp-kind').value,
-        value: root.querySelector('#cp-value').value,
-        min_amount: root.querySelector('#cp-min').value,
-        max_uses: root.querySelector('#cp-unlimited').checked ? 0 : root.querySelector('#cp-max').value,
-        course_ids: [...sel.selectedOptions].map((o) => o.value),
-        note: root.querySelector('#cp-note').value,
-        image_url,
-        expires_at: root.querySelector('#cp-exp').value ? new Date(`${root.querySelector('#cp-exp').value}T23:59:59`).toISOString() : null,
-      });
-      toast('บันทึกโค้ดแล้ว', 'success');
-      location.hash = '#/dashboard?tab=coupons';
-      window.dispatchEvent(new HashChangeEvent('hashchange'));
-    } catch (err) {
-      btn.disabled = false;
-      toast(err.message || 'บันทึกไม่สำเร็จ', 'error');
-    }
-  });
 
   root.querySelectorAll('[data-del-coupon]').forEach((btn) => {
     btn.addEventListener('click', async () => {

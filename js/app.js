@@ -50,24 +50,28 @@ function courseCardForAdmin(c) {
 }
 
 
-/* การ์ดคูปองสำหรับหน้าตัวอย่าง (เหมือนที่ผู้ปกครองเห็นใน 02._.book) */
+/* การ์ดคูปอง — โครงเดียวกับที่ผู้ปกครองเห็นใน 02._.book */
 function couponCardForAdmin(c, courses = []) {
-  const value = c.kind === 'amount' ? baht(c.value || 0) : `${c.value || 0}%`;
+  const vale = c.kind === 'amount' ? baht(c.value || 0) : `${c.value || 0}%`;
   const scope = (c.course_ids || []).length
     ? (c.course_ids || []).map((id) => courses.find((x) => x.id === id)?.title || 'คอร์ส').slice(0, 2).join(' · ')
     : 'ทุกคอร์ส';
+  const perUser = Number(c.max_per_user ?? 1);
+  const times = perUser > 0 ? `ใช้ได้ ${perUser} ครั้ง/คน` : 'ใช้ได้ไม่จำกัดครั้ง/คน';
   return `
   <article class="coupon-card ${c.image_url ? 'has-image' : ''}">
     ${c.image_url
-      ? `<img class="coupon-card__img" src="${e(c.image_url)}" alt=""><div class="coupon-card__state"><span class="chip chip--ok">ใช้ได้</span></div>`
+      ? `<img class="coupon-card__img" src="${e(c.image_url)}" alt="">
+         <div class="coupon-card__state"><span class="chip chip--ok">พร้อมใช้</span></div>`
       : `<div class="coupon-card__body">
-           <div class="coupon-card__value">${e(value)}</div>
+           <div class="coupon-card__value">${e(vale)}</div>
            <div class="coupon-card__text">
              <div class="coupon-card__title">${e(c.title || c.code || 'ชื่อคูปอง')}</div>
              <div class="tiny dim">${e(scope)}</div>
+             <div class="tiny dim">${e(times)}</div>
              <div class="tiny dim">${c.expires_at ? 'มีวันหมดอายุ' : 'ไม่มีวันหมดอายุ'}</div>
            </div>
-           <div class="coupon-card__right"><span class="chip chip--ok">ใช้ได้</span></div>
+           <div class="coupon-card__right"><span class="chip chip--ok">พร้อมใช้</span></div>
          </div>`}
   </article>`;
 }

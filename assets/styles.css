@@ -4132,3 +4132,33 @@ button.chip:hover { background: var(--mint-strong); }
   font-family: var(--brand-font); font-size: 12.5px; letter-spacing: .04em;
   background: var(--mint-soft); border: 1px solid var(--book-line); border-radius: 8px; padding: 4px 9px;
 }
+
+/* ══ คูปองในแอดมิน: ใช้การ์ดแบบเดียวกับฝั่งลูกค้า ═══════ */
+.coupon-grid-admin { display: grid; grid-template-columns: repeat(auto-fill, minmax(420px, 1fr)); gap: 16px; }
+.coupon-wrap { display: flex; flex-direction: column; }
+.coupon-wrap .coupon-card {
+  background: #fff; border: 1px solid var(--book-line); border-radius: 16px 16px 0 0;
+  border-bottom: 0; overflow: hidden; position: relative;
+}
+.coupon-wrap .coupon-card__body {
+  display: flex; flex-direction: row; align-items: flex-start; gap: 16px; padding: 18px 20px;
+}
+.coupon-wrap .coupon-card__value {
+  font-family: var(--brand-font); font-size: 30px; line-height: 1; flex: 0 0 auto; min-width: 96px;
+  display: flex; align-items: center; align-self: stretch;
+}
+.coupon-wrap .coupon-card__text { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 4px; }
+.coupon-wrap .coupon-card__title { font-family: var(--brand-font); font-size: 19px; font-weight: 600; line-height: 1.3; }
+.coupon-wrap .coupon-card__right { display: flex; flex-direction: column; align-items: flex-end; gap: 8px; flex: 0 0 auto; margin-left: auto; }
+.coupon-wrap .coupon-card__img { width: 100%; aspect-ratio: 16/9; object-fit: cover; display: block; }
+.coupon-wrap .coupon-card__state { position: absolute; top: 10px; right: 12px; }
+.coupon-card__admin {
+  display: flex; align-items: center; gap: 10px;
+  padding: 10px 14px; border: 1px solid var(--book-line); border-top: 0;
+  border-radius: 0 0 16px 16px; background: #fbf9f4;
+}
+.coupon-card__code {
+  font-family: var(--brand-font); font-size: 12.5px; letter-spacing: .04em;
+  background: var(--mint-soft); border: 1px solid var(--book-line); border-radius: 8px; padding: 4px 9px;
+}
+@media (max-width: 900px) { .coupon-grid-admin { grid-template-columns: 1fr; } }
