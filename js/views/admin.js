@@ -131,7 +131,7 @@ function ordersHtml(orders, ctx) {
           <div class="tiny dim">${e(o.parent?.phone || '—')}${o.parent?.line_id ? ` · ${e(o.parent.line_id)}` : ''}</div>
           <div style="margin-top:8px;font-family:var(--brand-font);font-size:15px">${e(o.course_title)}</div>
           <div class="tiny dim">ผู้เรียน ${e(o.student_name || '—')} · ${e(thaiDateTime(o.created_at))}</div>
-          ${o.coupon_code ? `<div class="tiny dim">ใช้โค้ด ${e(o.coupon_title || o.coupon_code)} · ประหยัด ${ctx.baht(o.discount || 0)}</div>` : ''}
+          ${couponCell(o, ctx)}
           <div class="price" style="margin-top:6px">${ctx.baht(o.amount)}</div>
         </div>
 
@@ -153,18 +153,30 @@ function ordersHtml(orders, ctx) {
       </div>
     </div>
     <div class="table-wrap"><table class="book-table">
-      <thead><tr><th>วันที่</th><th>ผู้ปกครอง</th><th>คอร์ส</th><th>ผู้เรียน</th><th>ยอด</th><th>สถานะ</th></tr></thead>
+      <thead><tr><th>วันที่</th><th>ผู้ปกครอง</th><th>คอร์ส</th><th>ผู้เรียน</th><th>คูปองที่ใช้</th><th>ยอด</th><th>สถานะ</th></tr></thead>
       <tbody>${history.map((o) => `<tr>
         <td class="tiny">${e(thaiDate(o.created_at))}</td>
         <td><button class="parent-link" data-open-parent="${o.user_id}">${e(o.parent?.name || '—')}</button>
           <div class="tiny dim">${e(o.parent?.email || '')}</div></td>
         <td>${e(o.course_title)}</td>
         <td>${e(o.student_name || '—')}</td>
+        <td class="tiny">${couponCell(o, ctx)}</td>
         <td>${ctx.baht(o.amount)}</td>
         <td>${ctx.statusBadge(o.status)}</td>
-      </tr>`).join('') || '<tr><td colspan="6" class="tiny dim">ยังไม่มีประวัติ</td></tr>'}</tbody>
+      </tr>`).join('') || '<tr><td colspan="7" class="tiny dim">ยังไม่มีประวัติ</td></tr>'}</tbody>
     </table></div>
   </div>`;
+}
+
+
+/** แสดงคูปองที่ใช้ในออเดอร์ — ถ้าไม่มีให้ขึ้น "ไม่ได้ใช้คูปอง" */
+function couponCell(o, ctx) {
+  const code = String(o.coupon_code || '').trim();
+  if (!code) return '<span class="tiny dim">ไม่ได้ใช้คูปอง</span>';
+  const title = String(o.coupon_title || '').trim();
+  const disc = Number(o.discount || 0);
+  return `<div style="font-family:var(--brand-font);font-size:12.5px">${e(title && title !== code ? title : code)}</div>
+    <div class="tiny dim">โค้ด ${e(code)}${disc > 0 ? ` · ประหยัด ${ctx.baht(disc)}` : ''}</div>`;
 }
 
 /* ── คอร์ส + หมวดหมู่ ───────────────────────────────── */
@@ -860,7 +872,7 @@ function downloadOrdersCsv(rows) {
       o.student_name || '',
       Number(o.amount || 0),
       Number(o.discount || 0),
-      o.coupon_code || '',
+      o.coupon_code ? `${o.coupon_code}${o.coupon_title && o.coupon_title !== o.coupon_code ? ` (${o.coupon_title})` : ''}` : 'ไม่ได้ใช้คูปอง',
       statusText[o.status] || o.status,
       o.confirmed_at ? thaiDateTime(o.confirmed_at) : '',
     ].map(esc).join(','));
