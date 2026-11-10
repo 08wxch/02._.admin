@@ -3,7 +3,7 @@
 import { CONFIG } from './config.js';
 import * as data from './data.js';
 import { closeModal, confirmDialog, openModal, toast } from './ui.js';
-import { e, formatNumber } from './utils.js';
+import { e, formatNumber, thaiDate } from './utils.js';
 import { buildMenu, renderAdmin } from './views/admin.js';
 import { renderStudents } from './views/students.js';
 import { renderTeacherAuth } from './views/auth.js';

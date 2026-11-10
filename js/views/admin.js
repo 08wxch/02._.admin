@@ -1128,6 +1128,7 @@ function bindCouponForm(root, ctx) {
       min_amount: Number(minInput?.value || 0),
       max_per_user: perUnlimited?.checked ? 0 : Number(perInput?.value || 1),
       expires_at: expInput?.value || null,
+      note: form.querySelector('#cp-note')?.value || '',
       image_url: form.querySelector('#cp-img-preview img')?.getAttribute('src') || '',
     };
   };
@@ -1146,7 +1147,7 @@ function bindCouponForm(root, ctx) {
 
   isPercent?.addEventListener('change', () => { syncUnit(); renderPreview(); });
   limited?.addEventListener('change', () => { syncLimited(); renderPreview(); });
-  [value, title, code, minInput, perInput, expInput].forEach((el) => {
+  [value, title, code, minInput, perInput, expInput, form.querySelector('#cp-note')].forEach((el) => {
     if (!el) return;
     el.addEventListener('input', renderPreview);
     el.addEventListener('change', renderPreview);
